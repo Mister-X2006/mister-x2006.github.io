@@ -3,45 +3,73 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Einkaufsliste Kategorie-basiert</title>
+<title>Einkaufsliste Smart</title>
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <style>
 body { font-family: Arial; margin:20px; transition:.3s; }
 .dark { background:#121212; color:white; }
 
-button { padding:6px 10px; margin:4px; cursor:pointer; }
-input { padding:6px; margin:4px; }
+button {
+    padding:10px 14px;
+    margin:4px;
+    border:none;
+    border-radius:30px;
+    cursor:pointer;
+    font-weight:bold;
+    transition:.2s;
+}
+
+button:hover { opacity:0.8; }
+
+.primary { background:#4CAF50; color:white; }
+.secondary { background:#2196F3; color:white; }
+.danger { background:#f44336; color:white; }
+.theme { background:#555; color:white; }
+
+input {
+    padding:8px;
+    margin:4px;
+    border-radius:20px;
+    border:1px solid #ccc;
+}
 
 .item {
     display:flex;
     justify-content:space-between;
-    padding:6px;
+    padding:8px;
     border-bottom:1px solid #ccc;
 }
 .done { text-decoration:line-through; opacity:0.6; }
 
-#reader { width:300px; margin-top:10px; }
+#reader { width:300px; margin-top:15px; }
 </style>
 </head>
 <body>
 
 <h1>
 🛒 Einkaufsliste
-<button onclick="toggleTheme()">🌙/☀</button>
+<button class="theme" onclick="toggleTheme()">🌙/☀</button>
 </h1>
 
 <p>Datum: <span id="date"></span></p>
 
 <hr>
 
-<h3>Produkt-Typ hinzufügen</h3>
-<input id="typeInput" placeholder="z.B. Milch, Brot, Käse">
-<button onclick="addType()">Hinzufügen</button>
+<h3>Produkt-Typ manuell hinzufügen</h3>
+<input id="typeInput" placeholder="z.B. Milch, Brot">
+<button class="primary" onclick="addType()">Hinzufügen</button>
 
 <hr>
 
-<button onclick="startScanner()">📷 Produkt scannen</button>
+<h3>Alternative: Per Scan hinzufügen</h3>
+<button class="secondary" onclick="scanAndAdd()">📷 Hinzufügen (Scan)</button>
+
+<hr>
+
+<h3>Produkt als gekauft markieren</h3>
+<button class="primary" onclick="scanToComplete()">✔ Als gekauft scannen</button>
+
 <div id="reader"></div>
 
 <hr>
@@ -54,13 +82,13 @@ new Date().toLocaleDateString("de-DE");
 
 let items = JSON.parse(localStorage.getItem("items") || "[]");
 
-function save() {
+function save(){
     localStorage.setItem("items", JSON.stringify(items));
 }
 
-function render() {
+function render(){
     const list = document.getElementById("list");
-    list.innerHTML = "";
+    list.innerHTML="";
 
     items.forEach(item=>{
         const div = document.createElement("div");
@@ -70,21 +98,21 @@ function render() {
                 ${item.type}
             </span>
             <div>
-                <button onclick="toggle('${item.id}')">✔</button>
-                <button onclick="removeItem('${item.id}')">❌</button>
+                <button class="primary" onclick="toggle('${item.id}')">✔</button>
+                <button class="danger" onclick="removeItem('${item.id}')">✖</button>
             </div>
         `;
         list.appendChild(div);
     });
 }
 
-function addType() {
+function addType(){
     const type = document.getElementById("typeInput").value.trim();
-    if (!type) return;
+    if(!type) return;
 
     items.push({
-        id: crypto.randomUUID(),
-        type: type.toLowerCase(),
+        id:crypto.randomUUID(),
+        type:type.toLowerCase(),
         done:false
     });
 
@@ -108,41 +136,71 @@ function removeItem(id){
     render();
 }
 
-function startScanner(){
+function scan(barcodeCallback){
     const reader = new Html5Qrcode("reader");
     reader.start(
         { facingMode:"environment" },
         { fps:10, qrbox:250 },
-        barcode=>{
+        code=>{
             reader.stop();
-
-            fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`)
-            .then(res=>res.json())
-            .then(data=>{
-                if(data.status===1){
-                    const categories =
-                        (data.product.categories || "").toLowerCase();
-
-                    const match = items.find(i =>
-                        categories.includes(i.type)
-                        && !i.done
-                    );
-
-                    if(match){
-                        match.done=true;
-                        alert("Erledigt: " + match.type);
-                    } else {
-                        alert("Kein passender Produkt-Typ auf der Liste.");
-                    }
-
-                    save();
-                    render();
-                } else {
-                    alert("Produkt nicht gefunden.");
-                }
-            });
+            barcodeCallback(code);
         }
     ).catch(()=>alert("Kamera nicht verfügbar"));
+}
+
+function scanAndAdd(){
+    scan(barcode=>{
+        fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`)
+        .then(res=>res.json())
+        .then(data=>{
+            if(data.status===1){
+                const name =
+                    (data.product.categories || "").split(",")[0]
+                    || data.product.product_name
+                    || "Unbekannt";
+
+                items.push({
+                    id:crypto.randomUUID(),
+                    type:name.toLowerCase(),
+                    done:false
+                });
+
+                save();
+                render();
+            } else {
+                alert("Produkt nicht gefunden.");
+            }
+        });
+    });
+}
+
+function scanToComplete(){
+    scan(barcode=>{
+        fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`)
+        .then(res=>res.json())
+        .then(data=>{
+            if(data.status===1){
+                const categories =
+                    (data.product.categories || "").toLowerCase();
+
+                const match = items.find(i =>
+                    categories.includes(i.type) && !i.done
+                );
+
+                if(match){
+                    match.done=true;
+                    alert("Erledigt: " + match.type);
+                } else {
+                    alert("Kein passender Typ auf Liste.");
+                }
+
+                save();
+                render();
+            } else {
+                alert("Produkt nicht gefunden.");
+            }
+        });
+    });
 }
 
 function toggleTheme(){
