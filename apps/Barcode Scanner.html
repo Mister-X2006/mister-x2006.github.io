@@ -1,0 +1,133 @@
+<!DOCTYPE html><html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Barcode Scanner App</title>
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; background:#f4f4f4; }
+h1 { margin-bottom:10px; }
+#reader { width: 300px; margin-bottom: 20px; }
+input, select, button { padding:8px; margin:5px 0; width:100%; }
+table { width:100%; border-collapse: collapse; margin-top:20px; background:white; }
+th, td { border:1px solid #ccc; padding:8px; text-align:left; }
+th { background:#eee; }
+.actions button { width:auto; margin-right:5px; }
+.container { max-width:700px; margin:auto; }
+.card { background:white; padding:15px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.1); margin-bottom:20px; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Barcode Scanner</h1><div class="card">
+<div id="reader"></div>
+<label>Name</label>
+<input type="text" id="name" placeholder="Produktname">
+<label>Kategorie</label>
+<input type="text" id="category" placeholder="Kategorie">
+<label>Barcode</label>
+<input type="text" id="barcode" placeholder="Barcode" readonly>
+<button onclick="saveItem()">Speichern</button>
+</div><div class="card">
+<button onclick="exportJSON()">Als JSON Datei exportieren</button>
+<button onclick="importJSON()">JSON Datei laden</button>
+<input type="file" id="fileInput" style="display:none" onchange="handleFile(event)">
+</div><div class="card">
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Kategorie</th>
+<th>Barcode</th>
+<th>Aktionen</th>
+</tr>
+</thead>
+<tbody id="itemTable"></tbody>
+</table>
+</div>
+</div><script>
+const STORAGE_KEY = "barcode_app_items";
+let items = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+
+function renderTable() {
+  const table = document.getElementById("itemTable");
+  table.innerHTML = "";
+  items.forEach((item, index) => {
+    table.innerHTML += `
+      <tr>
+        <td>${item.name}</td>
+        <td>${item.category}</td>
+        <td>${item.barcode}</td>
+        <td class="actions">
+          <button onclick="deleteItem(${index})">Löschen</button>
+        </td>
+      </tr>`;
+  });
+}
+
+function saveItem() {
+  const name = document.getElementById("name").value;
+  const category = document.getElementById("category").value;
+  const barcode = document.getElementById("barcode").value;
+  if (!barcode) return alert("Kein Barcode gescannt");
+  items.push({ name, category, barcode });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  renderTable();
+  document.getElementById("name").value = "";
+  document.getElementById("category").value = "";
+  document.getElementById("barcode").value = "";
+}
+
+function deleteItem(index) {
+  items.splice(index, 1);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  renderTable();
+}
+
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(items, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "barcodes.json";
+  a.click();
+}
+
+function importJSON() {
+  document.getElementById("fileInput").click();
+}
+
+function handleFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    items = JSON.parse(e.target.result);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    renderTable();
+  };
+  reader.readAsText(file);
+}
+
+function publishToGitHub() {
+  // Hier müsstest du die GitHub API mit einem Token verwenden
+  // PUT https://api.github.com/repos/USER/REPO/contents/barcodes.json
+}
+
+function onScanSuccess(decodedText) {
+  document.getElementById("barcode").value = decodedText;
+}
+
+const html5QrCode = new Html5Qrcode("reader");
+Html5Qrcode.getCameras().then(devices => {
+  if (devices && devices.length) {
+    html5QrCode.start(
+      devices[0].id,
+      { fps: 10, qrbox: 250 },
+      onScanSuccess
+    );
+  }
+});
+
+renderTable();
+</script></body>
+</html>
