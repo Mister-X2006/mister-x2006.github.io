@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Einkaufsliste Kategorie-basiert</title>
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<style>
+body { font-family: Arial; margin:20px; transition:.3s; }
+.dark { background:#121212; color:white; }
+
+button { padding:6px 10px; margin:4px; cursor:pointer; }
+input { padding:6px; margin:4px; }
+
+.item {
+    display:flex;
+    justify-content:space-between;
+    padding:6px;
+    border-bottom:1px solid #ccc;
+}
+.done { text-decoration:line-through; opacity:0.6; }
+
+#reader { width:300px; margin-top:10px; }
+</style>
+</head>
+<body>
+
+<h1>
+🛒 Einkaufsliste
+<button onclick="toggleTheme()">🌙/☀</button>
+</h1>
+
+<p>Datum: <span id="date"></span></p>
+
+<hr>
+
+<h3>Produkt-Typ hinzufügen</h3>
+<input id="typeInput" placeholder="z.B. Milch, Brot, Käse">
+<button onclick="addType()">Hinzufügen</button>
+
+<hr>
+
+<button onclick="startScanner()">📷 Produkt scannen</button>
+<div id="reader"></div>
+
+<hr>
+
+<div id="list"></div>
+
+<script>
+document.getElementById("date").innerText =
+new Date().toLocaleDateString("de-DE");
+
+let items = JSON.parse(localStorage.getItem("items") || "[]");
+
+function save() {
+    localStorage.setItem("items", JSON.stringify(items));
+}
+
+function render() {
+    const list = document.getElementById("list");
+    list.innerHTML = "";
+
+    items.forEach(item=>{
+        const div = document.createElement("div");
+        div.className="item";
+        div.innerHTML=`
+            <span class="${item.done?'done':''}">
+                ${item.type}
+            </span>
+            <div>
+                <button onclick="toggle('${item.id}')">✔</button>
+                <button onclick="removeItem('${item.id}')">❌</button>
+            </div>
+        `;
+        list.appendChild(div);
+    });
+}
+
+function addType() {
+    const type = document.getElementById("typeInput").value.trim();
+    if (!type) return;
+
+    items.push({
+        id: crypto.randomUUID(),
+        type: type.toLowerCase(),
+        done:false
+    });
+
+    document.getElementById("typeInput").value="";
+    save();
+    render();
+}
+
+function toggle(id){
+    items = items.map(i=>{
+        if(i.id===id) i.done=!i.done;
+        return i;
+    });
+    save();
+    render();
+}
+
+function removeItem(id){
+    items = items.filter(i=>i.id!==id);
+    save();
+    render();
+}
+
+function startScanner(){
+    const reader = new Html5Qrcode("reader");
+    reader.start(
+        { facingMode:"environment" },
+        { fps:10, qrbox:250 },
+        barcode=>{
+            reader.stop();
+
+            fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`)
+            .then(res=>res.json())
+            .then(data=>{
+                if(data.status===1){
+                    const categories =
+                        (data.product.categories || "").toLowerCase();
+
+                    const match = items.find(i =>
+                        categories.includes(i.type)
+                        && !i.done
+                    );
+
+                    if(match){
+                        match.done=true;
+                        alert("Erledigt: " + match.type);
+                    } else {
+                        alert("Kein passender Produkt-Typ auf der Liste.");
+                    }
+
+                    save();
+                    render();
+                } else {
+                    alert("Produkt nicht gefunden.");
+                }
+            });
+        }
+    ).catch(()=>alert("Kamera nicht verfügbar"));
+}
+
+function toggleTheme(){
+    document.body.classList.toggle("dark");
+    localStorage.setItem("theme",
+        document.body.classList.contains("dark")?"dark":"light");
+}
+
+if(localStorage.getItem("theme")==="dark")
+    document.body.classList.add("dark");
+
+render();
+</script>
+
+</body>
+</html>
