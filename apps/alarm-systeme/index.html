@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alarm-Systeme Simulation</title>
+  <meta name="description" content="Simulation von drei Sirenen-Alarmmustern: Warnung, Entwarnung und Feuerwehralarm." />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --danger: #ef4444;
+      --ok: #22c55e;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      background: radial-gradient(circle at top, #1e293b 0%, #0f172a 70%);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 1.2rem;
+    }
+
+    main {
+      width: min(820px, 100%);
+      background: color-mix(in srgb, var(--card) 88%, black 12%);
+      border: 1px solid #334155;
+      border-radius: 14px;
+      padding: 1.2rem;
+      box-shadow: 0 14px 35px rgba(0, 0, 0, 0.35);
+    }
+
+    h1 { margin-top: 0; }
+    p { color: var(--muted); line-height: 1.45; }
+
+    .grid {
+      display: grid;
+      gap: 0.9rem;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      margin-top: 1rem;
+    }
+
+    button {
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 0.8rem;
+      font-size: 0.98rem;
+      font-weight: 700;
+      cursor: pointer;
+      color: #0f172a;
+      transition: transform 0.12s ease, filter 0.2s ease;
+    }
+
+    button:hover { transform: translateY(-1px); filter: brightness(1.06); }
+    button:active { transform: translateY(0); }
+
+    .warn { background: #fbbf24; }
+    .all-clear { background: #22c55e; }
+    .fire { background: #f97316; }
+    .stop { background: var(--danger); color: white; margin-top: 1rem; }
+
+    .status {
+      margin-top: 1rem;
+      padding: 0.8rem;
+      border-radius: 10px;
+      background: #0b1220;
+      border: 1px solid #334155;
+      font-weight: 700;
+      min-height: 1.3rem;
+    }
+
+    ul { margin-bottom: 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Simulation: 3 Alarm-Systeme</h1>
+    <p>
+      Diese Demo simuliert drei typische Sirenenmuster (Warnung, Entwarnung und Feuerwehralarm)
+      über den Lautsprecher. Die Töne sind technisch nachgebildet und dienen nur zu Lern-/Demozwecken.
+    </p>
+
+    <div class="grid">
+      <button class="warn" data-alarm="warnung">⚠️ Warnung der Bevölkerung</button>
+      <button class="all-clear" data-alarm="entwarnung">✅ Entwarnung</button>
+      <button class="fire" data-alarm="feuerwehr">🚒 Feuerwehralarm</button>
+    </div>
+
+    <button class="stop" id="stopBtn">⏹ Sofort stoppen</button>
+
+    <div class="status" id="status">Bereit.</div>
+
+    <ul>
+      <li><strong>Warnung:</strong> 60 Sekunden auf- und abschwellender Heulton.</li>
+      <li><strong>Entwarnung:</strong> 60 Sekunden gleichbleibender Dauerton.</li>
+      <li><strong>Feuerwehralarm:</strong> 3× auf- und abschwellender Heulton à 15 Sekunden mit je 7 Sekunden Pause.</li>
+    </ul>
+  </main>
+
+  <script>
+    let audioCtx;
+    let oscillator;
+    let gainNode;
+    let activeIntervals = [];
+    let activeTimeouts = [];
+
+    const statusEl = document.getElementById('status');
+
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
+
+    function ensureAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function startTone(freq = 440, volume = 0.14, type = 'sawtooth') {
+      stopTone();
+      oscillator = audioCtx.createOscillator();
+      gainNode = audioCtx.createGain();
+      oscillator.type = type;
+      oscillator.frequency.value = freq;
+      gainNode.gain.value = volume;
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.start();
+    }
+
+    function startSirenSweep(minFreq, maxFreq, sweepMs, volume = 0.15) {
+      startTone(minFreq, volume, 'sawtooth');
+
+      const gainLfo = audioCtx.createOscillator();
+      const gainDepth = audioCtx.createGain();
+      gainLfo.type = 'sine';
+      gainLfo.frequency.value = 6;
+      gainDepth.gain.value = 0.025;
+      gainLfo.connect(gainDepth);
+      gainDepth.connect(gainNode.gain);
+      gainLfo.start();
+
+      let f = minFreq;
+      let dir = 1;
+      const step = (maxFreq - minFreq) / Math.max(8, sweepMs / 60);
+      const id = setInterval(() => {
+        if (!oscillator) return;
+        f += dir * step;
+        if (f >= maxFreq) dir = -1;
+        if (f <= minFreq) dir = 1;
+        oscillator.frequency.setTargetAtTime(f, audioCtx.currentTime, 0.04);
+      }, 60);
+      activeIntervals.push(id);
+
+      activeTimeouts.push(setTimeout(() => {
+        gainLfo.stop();
+        gainLfo.disconnect();
+        gainDepth.disconnect();
+      }, 0));
+    }
+
+    function stopTone() {
+      if (oscillator) {
+        oscillator.stop();
+        oscillator.disconnect();
+        gainNode.disconnect();
+        oscillator = null;
+        gainNode = null;
+      }
+    }
+
+    function clearTimers() {
+      activeIntervals.forEach(clearInterval);
+      activeTimeouts.forEach(clearTimeout);
+      activeIntervals = [];
+      activeTimeouts = [];
+    }
+
+    function stopAll() {
+      clearTimers();
+      stopTone();
+      setStatus('Gestoppt.');
+    }
+
+    function scheduleTimeout(fn, ms) {
+      const id = setTimeout(fn, ms);
+      activeTimeouts.push(id);
+    }
+
+    function playWarnung() {
+      stopAll();
+      ensureAudio();
+      setStatus('Warnung läuft (60s, sirenig)...');
+      startSirenSweep(360, 900, 3600, 0.17);
+
+      scheduleTimeout(() => {
+        stopAll();
+        setStatus('Warnung beendet.');
+      }, 60000);
+    }
+
+    function playEntwarnung() {
+      stopAll();
+      ensureAudio();
+      setStatus('Entwarnung läuft (60s, Dauerton)...');
+      startTone(520, 0.14, 'triangle');
+
+      scheduleTimeout(() => {
+        stopAll();
+        setStatus('Entwarnung beendet.');
+      }, 60000);
+    }
+
+    function playFeuerwehr() {
+      stopAll();
+      ensureAudio();
+      setStatus('Feuerwehralarm läuft (3 x 15s, auf/ab)...');
+
+      const segments = [
+        { on: true, ms: 15000 },
+        { on: false, ms: 7000 },
+        { on: true, ms: 15000 },
+        { on: false, ms: 7000 },
+        { on: true, ms: 15000 }
+      ];
+
+      let t = 0;
+      segments.forEach((seg) => {
+        scheduleTimeout(() => {
+          if (seg.on) {
+            startSirenSweep(620, 930, 1200, 0.16);
+          } else {
+            stopTone();
+          }
+        }, t);
+        t += seg.ms;
+      });
+
+      scheduleTimeout(() => {
+        stopAll();
+        setStatus('Feuerwehralarm beendet.');
+      }, t);
+    }
+
+    document.querySelectorAll('[data-alarm]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const alarm = btn.dataset.alarm;
+        if (alarm === 'warnung') playWarnung();
+        if (alarm === 'entwarnung') playEntwarnung();
+        if (alarm === 'feuerwehr') playFeuerwehr();
+      });
+    });
+
+    document.getElementById('stopBtn').addEventListener('click', stopAll);
+  </script>
+</body>
+</html>
