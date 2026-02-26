@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Alarm-Systeme Simulationen</title>
+  <title>Alarm-Systeme Simulation</title>
   <meta name="description" content="Simulation von drei Sirenen-Alarmmustern: Warnung, Entwarnung und Feuerwehralarm." />
   <style>
     :root {
@@ -100,7 +100,7 @@
     <ul>
       <li><strong>Warnung:</strong> 60 Sekunden auf- und abschwellender Heulton.</li>
       <li><strong>Entwarnung:</strong> 60 Sekunden gleichbleibender Dauerton.</li>
-      <li><strong>Feuerwehralarm:</strong> 3× Dauerton à 15 Sekunden mit je 7 Sekunden Pause.</li>
+      <li><strong>Feuerwehralarm:</strong> 3× auf- und abschwellender Heulton à 15 Sekunden mit je 7 Sekunden Pause.</li>
     </ul>
   </main>
 
@@ -126,16 +126,47 @@
       }
     }
 
-    function startTone(freq = 440, volume = 0.14) {
+    function startTone(freq = 440, volume = 0.14, type = 'sawtooth') {
       stopTone();
       oscillator = audioCtx.createOscillator();
       gainNode = audioCtx.createGain();
-      oscillator.type = 'sine';
+      oscillator.type = type;
       oscillator.frequency.value = freq;
       gainNode.gain.value = volume;
       oscillator.connect(gainNode);
       gainNode.connect(audioCtx.destination);
       oscillator.start();
+    }
+
+    function startSirenSweep(minFreq, maxFreq, sweepMs, volume = 0.15) {
+      startTone(minFreq, volume, 'sawtooth');
+
+      const gainLfo = audioCtx.createOscillator();
+      const gainDepth = audioCtx.createGain();
+      gainLfo.type = 'sine';
+      gainLfo.frequency.value = 6;
+      gainDepth.gain.value = 0.025;
+      gainLfo.connect(gainDepth);
+      gainDepth.connect(gainNode.gain);
+      gainLfo.start();
+
+      let f = minFreq;
+      let dir = 1;
+      const step = (maxFreq - minFreq) / Math.max(8, sweepMs / 60);
+      const id = setInterval(() => {
+        if (!oscillator) return;
+        f += dir * step;
+        if (f >= maxFreq) dir = -1;
+        if (f <= minFreq) dir = 1;
+        oscillator.frequency.setTargetAtTime(f, audioCtx.currentTime, 0.04);
+      }, 60);
+      activeIntervals.push(id);
+
+      activeTimeouts.push(setTimeout(() => {
+        gainLfo.stop();
+        gainLfo.disconnect();
+        gainDepth.disconnect();
+      }, 0));
     }
 
     function stopTone() {
@@ -169,19 +200,8 @@
     function playWarnung() {
       stopAll();
       ensureAudio();
-      setStatus('Warnung läuft (60s, heulend)...');
-      startTone(400, 0.16);
-
-      let f = 400;
-      let dir = 1;
-      const id = setInterval(() => {
-        if (!oscillator) return;
-        f += dir * 18;
-        if (f > 820) dir = -1;
-        if (f < 380) dir = 1;
-        oscillator.frequency.setTargetAtTime(f, audioCtx.currentTime, 0.02);
-      }, 60);
-      activeIntervals.push(id);
+      setStatus('Warnung läuft (60s, sirenig)...');
+      startSirenSweep(360, 900, 3600, 0.17);
 
       scheduleTimeout(() => {
         stopAll();
@@ -193,7 +213,7 @@
       stopAll();
       ensureAudio();
       setStatus('Entwarnung läuft (60s, Dauerton)...');
-      startTone(520, 0.14);
+      startTone(520, 0.14, 'triangle');
 
       scheduleTimeout(() => {
         stopAll();
@@ -204,7 +224,7 @@
     function playFeuerwehr() {
       stopAll();
       ensureAudio();
-      setStatus('Feuerwehralarm läuft (3 x 15s)...');
+      setStatus('Feuerwehralarm läuft (3 x 15s, auf/ab)...');
 
       const segments = [
         { on: true, ms: 15000 },
@@ -218,7 +238,7 @@
       segments.forEach((seg) => {
         scheduleTimeout(() => {
           if (seg.on) {
-            startTone(680, 0.15);
+            startSirenSweep(620, 930, 1200, 0.16);
           } else {
             stopTone();
           }
