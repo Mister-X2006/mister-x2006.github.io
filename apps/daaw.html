@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MIDI Piano Roll</title>
+<style>
+body{margin:0;font-family:sans-serif;overflow:hidden}
+#topbar{padding:8px;background:#222;color:white;display:flex;gap:10px;align-items:center}
+#layout{display:flex;height:calc(100vh - 40px)}
+#tracks{width:220px;background:#eee;overflow:auto}
+.track{padding:6px;border-bottom:1px solid #ccc;cursor:pointer}
+.active{background:#ddd}
+#main{flex:1;position:relative}
+canvas{background:#111;width:100%;height:100%}
+.panel{background:#f4f4f4;border-bottom:1px solid #ccc;padding:5px}
+.hidden{display:none}
+button{cursor:pointer}
+select{padding:3px}
+</style>
+</head>
+<body>
+<div id="topbar">
+<button onclick="togglePanel('menu')">☰ Menü</button>
+<button onclick="addTrack()">+ Spur</button>
+<select id="instrumentSelect"></select>
+<select id="outputMode">
+<option value="internal">Eigenes Gerät</option>
+<option value="midi">MIDI Gerät</option>
+</select>
+<select id="midiDevices"></select>
+<span id="deviceType"></span>
+</div>
+<div id="menu" class="panel">
+Zoom <input type="range" min="10" max="200" value="40" id="zoom">
+</div>
+<div id="layout">
+<div id="tracks"></div>
+<div id="main"><canvas id="roll"></canvas></div>
+</div>
+<script>
+
+const instruments=[
+"Acoustic Grand Piano","Bright Piano","Electric Grand Piano","Honky-tonk Piano",
+"Electric Piano 1","Electric Piano 2","Harpsichord","Clavinet",
+"Celesta","Glockenspiel","Music Box","Vibraphone","Marimba",
+"Xylophone","Tubular Bells","Dulcimer","Drawbar Organ",
+"Percussive Organ","Rock Organ","Church Organ","Reed Organ",
+"Accordion","Harmonica","Tango Accordion","Nylon Guitar",
+"Steel Guitar","Jazz Guitar","Clean Guitar","Muted Guitar",
+"Overdrive Guitar","Distortion Guitar","Guitar Harmonics",
+"Acoustic Bass","Electric Bass Finger","Electric Bass Pick",
+"Fretless Bass","Slap Bass 1","Slap Bass 2","Synth Bass 1",
+"Synth Bass 2","Violin","Viola","Cello","Contrabass",
+"Tremolo Strings","Pizzicato Strings","Orchestral Harp",
+"Timpani","String Ensemble","Synth Strings","Choir Aahs",
+"Voice Oohs","Synth Voice","Orchestra Hit","Trumpet",
+"Trombone","Tuba","Muted Trumpet","French Horn",
+"Brass Section","Synth Brass","Soprano Sax","Alto Sax",
+"Tenor Sax","Baritone Sax","Oboe","English Horn",
+"Bassoon","Clarinet","Piccolo","Flute","Recorder",
+"Pan Flute","Blown Bottle","Shakuhachi","Whistle",
+"Ocarina","Lead Square","Lead Saw","Lead Calliope",
+"Lead Chiff","Lead Charang","Lead Voice","Lead Fifths",
+"Lead Bass","Pad New Age","Pad Warm","Pad Polysynth",
+"Pad Choir","Pad Bowed","Pad Metallic","Pad Halo",
+"Pad Sweep","FX Rain","FX Soundtrack","FX Crystal",
+"FX Atmosphere","FX Brightness","FX Goblins",
+"FX Echoes","FX SciFi","Sitar","Banjo","Shamisen",
+"Koto","Kalimba","Bagpipe","Fiddle","Shanai",
+"Tinkle Bell","Agogo","Steel Drums","Woodblock",
+"Taiko Drum","Melodic Tom","Synth Drum","Reverse Cymbal",
+"Guitar Fret Noise","Breath Noise","Seashore",
+"Bird Tweet","Telephone Ring","Helicopter","Applause",
+"Gunshot"
+];
+
+let tracks=[];
+let activeTrack=0;
+
+const trackDiv=document.getElementById("tracks");
+const canvas=document.getElementById("roll");
+const ctx=canvas.getContext("2d");
+
+function resize(){
+canvas.width=canvas.clientWidth;
+canvas.height=canvas.clientHeight;
+draw();
+}
+window.onresize=resize;
+resize();
+
+function togglePanel(id){
+document.getElementById(id).classList.toggle("hidden");
+resize();
+}
+
+function addTrack(){
+tracks.push({notes:[],instrument:0});
+activeTrack=tracks.length-1;
+updateTracks();
+}
+
+function updateTracks(){
+trackDiv.innerHTML="";
+tracks.forEach((t,i)=>{
+let d=document.createElement("div");
+d.className="track"+(i===activeTrack?" active":"");
+d.innerText="Spur "+(i+1);
+d.onclick=()=>{activeTrack=i;updateTracks();};
+trackDiv.appendChild(d);
+});
+}
+
+function draw(){
+ctx.clearRect(0,0,canvas.width,canvas.height);
+let zoom=document.getElementById("zoom").value;
+
+for(let x=0;x<canvas.width;x+=zoom){
+ctx.strokeStyle="#333";
+ctx.beginPath();
+ctx.moveTo(x,0);
+ctx.lineTo(x,canvas.height);
+ctx.stroke();
+}
+
+for(let y=0;y<canvas.height;y+=20){
+ctx.strokeStyle="#222";
+ctx.beginPath();
+ctx.moveTo(0,y);
+ctx.lineTo(canvas.width,y);
+ctx.stroke();
+}
+
+if(tracks[activeTrack]){
+tracks[activeTrack].notes.forEach(n=>{
+ctx.fillStyle="#0f0";
+ctx.fillRect(n.x,n.y,n.w,18);
+});
+}
+}
+
+canvas.onclick=e=>{
+let rect=canvas.getBoundingClientRect();
+let x=e.clientX-rect.left;
+let y=e.clientY-rect.top;
+
+tracks[activeTrack].notes.push({x:x,y:y,w:80});
+draw();
+playNote(y);
+}
+
+function playNote(y){
+let freq=440*Math.pow(2,(60-Math.floor(y/20))/12);
+
+if(document.getElementById("outputMode").value==="internal"){
+let ctxA=new AudioContext();
+let osc=ctxA.createOscillator();
+osc.frequency.value=freq;
+osc.connect(ctxA.destination);
+osc.start();
+osc.stop(ctxA.currentTime+.3);
+}
+}
+
+function populateInstruments(){
+let s=document.getElementById("instrumentSelect");
+instruments.forEach((i,n)=>{
+let o=document.createElement("option");
+o.value=n;
+o.text=i;
+s.appendChild(o);
+});
+}
+populateInstruments();
+
+navigator.requestMIDIAccess?.().then(midi=>{
+let sel=document.getElementById("midiDevices");
+midi.outputs.forEach(o=>{
+let opt=document.createElement("option");
+opt.text=o.name;
+opt.value=o.id;
+sel.appendChild(opt);
+});
+});
+
+function detectDevice(){
+let w=window.innerWidth;
+let t="PC";
+if(w<600)t="Telefon";
+else if(w<1000)t="Tablet";
+document.getElementById("deviceType").innerText=t;
+}
+detectDevice();
+
+setInterval(draw,200);
+
+addTrack();
+
+</script>
+</body>
+</html>
