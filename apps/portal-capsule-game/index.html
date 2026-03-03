@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Seamless Portal Capsule Game</title>
+  <meta name="description" content="Three.js Spiel mit nahtlosen Portalen, Kapsel-Spieler, Schatten und mehreren Testumgebungen für PC und Mobile." />
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #05070b; font-family: Inter, Arial, sans-serif; }
+    #game { position: fixed; inset: 0; }
+    #hud {
+      position: fixed; left: 12px; top: 12px; z-index: 10;
+      background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 12px; padding: 10px 12px; color: #dce6ff; max-width: min(90vw, 420px);
+      backdrop-filter: blur(6px);
+    }
+    #hud h1 { font-size: 14px; margin: 0 0 6px; color: #fff; }
+    #hud p { margin: 4px 0; font-size: 12px; line-height: 1.35; }
+    #hud .hint { opacity: .75; }
+
+    #mobileControls {
+      position: fixed; inset: 0; pointer-events: none; z-index: 15;
+      display: none;
+    }
+    #joystick {
+      position: absolute; left: 18px; bottom: 20px; width: 130px; height: 130px;
+      border-radius: 50%; border: 2px solid rgba(255,255,255,0.25);
+      background: rgba(20,25,40,0.4); pointer-events: auto; touch-action: none;
+    }
+    #stick {
+      position: absolute; width: 52px; height: 52px; border-radius: 50%;
+      background: rgba(154, 189, 255, 0.8); left: 39px; top: 39px;
+      box-shadow: 0 0 16px rgba(130, 170, 255, 0.7);
+      transform: translate3d(0,0,0);
+    }
+    #actions {
+      position: absolute; right: 18px; bottom: 20px; display: grid; grid-template-columns: repeat(2, 68px); gap: 10px;
+      pointer-events: auto;
+    }
+    .btn {
+      width: 68px; height: 68px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(18,24,38,0.75); color: #fff; font-size: 12px; font-weight: 700;
+      touch-action: manipulation;
+    }
+    .btn:active { transform: scale(0.96); }
+
+    @media (hover: none) and (pointer: coarse) {
+      #mobileControls { display: block; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="hud">
+    <h1>Seamless Portal Test Arena</h1>
+    <p><strong>PC:</strong> WASD / Pfeile bewegen, Maus drehen, <strong>Space</strong> springen, <strong>1-3</strong> Umgebung wechseln.</p>
+    <p><strong>Mobile:</strong> Joystick + Buttons rechts. Doppeltippen für Maus-Look aktivieren/deaktivieren.</p>
+    <p class="hint">Lauf durch den blauen oder orangefarbenen Ring, um nahtlos teleportiert zu werden.</p>
+  </div>
+
+  <div id="mobileControls" aria-hidden="true">
+    <div id="joystick"><div id="stick"></div></div>
+    <div id="actions">
+      <button class="btn" id="jumpBtn">JUMP</button>
+      <button class="btn" id="lookBtn">LOOK</button>
+      <button class="btn" id="envBtn">ENV</button>
+      <button class="btn" id="runBtn">RUN</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+    const canvas = document.getElementById('game');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x0a101a, 16, 70);
+
+    const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 300);
+
+    const hemi = new THREE.HemisphereLight(0x90bbff, 0x1d1f2b, 0.4);
+    scene.add(hemi);
+
+    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+    sun.position.set(10, 16, 9);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 60;
+    sun.shadow.camera.left = -22;
+    sun.shadow.camera.right = 22;
+    sun.shadow.camera.top = 22;
+    sun.shadow.camera.bottom = -22;
+    scene.add(sun);
+
+    const playerGroup = new THREE.Group();
+    scene.add(playerGroup);
+    const yawPivot = new THREE.Group();
+    const pitchPivot = new THREE.Group();
+    playerGroup.add(yawPivot);
+    yawPivot.add(pitchPivot);
+    pitchPivot.add(camera);
+
+    const capsule = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.35, 1.0, 6, 14),
+      new THREE.MeshStandardMaterial({ color: 0xeaf2ff, roughness: 0.25, metalness: 0.05 })
+    );
+    capsule.castShadow = true;
+    capsule.receiveShadow = true;
+    capsule.position.y = 1.0;
+    scene.add(capsule);
+
+    const player = {
+      position: new THREE.Vector3(0, 1.05, 6),
+      velocity: new THREE.Vector3(),
+      radius: 0.35,
+      height: 1.8,
+      onGround: false,
+      yaw: Math.PI,
+      pitch: 0,
+      run: false
+    };
+
+    const world = new THREE.Group();
+    scene.add(world);
+    const envGroup = new THREE.Group();
+    world.add(envGroup);
+
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x313a4a, roughness: 0.85, metalness: 0.05 });
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x5f6d87, roughness: 0.82, metalness: 0.02 });
+    const neonMat = new THREE.MeshStandardMaterial({ color: 0x112233, emissive: 0x113d89, emissiveIntensity: 0.6 });
+
+    function makeBox(size, pos, mat = wallMat) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), mat);
+      m.position.copy(pos);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      envGroup.add(m);
+      return m;
+    }
+
+    const obstacles = [];
+    function buildEnvironment(index) {
+      for (const c of [...envGroup.children]) envGroup.remove(c);
+      obstacles.length = 0;
+
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      envGroup.add(floor);
+
+      if (index === 0) {
+        scene.background = new THREE.Color(0x0a101a);
+        floorMat.color.setHex(0x313a4a);
+        for (let i = 0; i < 10; i++) {
+          const x = (i % 5 - 2) * 3.8;
+          const z = Math.floor(i / 5) * -7 - 2;
+          obstacles.push(makeBox(new THREE.Vector3(1.8, 1 + (i % 3), 1.8), new THREE.Vector3(x, 0.5 + (i % 3) / 2, z)));
+        }
+      } else if (index === 1) {
+        scene.background = new THREE.Color(0x11100c);
+        floorMat.color.setHex(0x3b3325);
+        for (let i = 0; i < 26; i++) {
+          const a = i / 26 * Math.PI * 2;
+          const r = 7 + (i % 2 ? 2 : 0);
+          const h = 0.8 + (i % 5) * 0.35;
+          obstacles.push(makeBox(new THREE.Vector3(1.2, h, 1.2), new THREE.Vector3(Math.cos(a) * r, h * 0.5, Math.sin(a) * r), neonMat));
+        }
+      } else {
+        scene.background = new THREE.Color(0x0a130e);
+        floorMat.color.setHex(0x2d4638);
+        for (let i = 0; i < 18; i++) {
+          const x = (i % 6 - 2.5) * 3;
+          const z = (Math.floor(i / 6) - 1) * 5;
+          const h = 1 + Math.abs(Math.sin(i * 0.8)) * 2;
+          obstacles.push(makeBox(new THREE.Vector3(2.2, h, 2.2), new THREE.Vector3(x, h / 2, z), i % 2 ? wallMat : neonMat));
+        }
+      }
+    }
+
+    const portalGeometry = new THREE.TorusGeometry(1.2, 0.14, 20, 64);
+    const portalFillGeo = new THREE.CircleGeometry(1.05, 64);
+
+    function makePortal(color) {
+      const frame = new THREE.Mesh(portalGeometry, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.65, roughness: 0.18, metalness: 0.75 }));
+      frame.castShadow = true;
+      frame.receiveShadow = true;
+
+      const target = new THREE.WebGLRenderTarget(1024, 1024, { samples: 2 });
+      const fill = new THREE.Mesh(portalFillGeo, new THREE.MeshBasicMaterial({ map: target.texture, side: THREE.DoubleSide }));
+      fill.position.z = 0.01;
+      frame.add(fill);
+
+      const marker = new THREE.Object3D();
+      marker.position.z = 0.5;
+      frame.add(marker);
+
+      world.add(frame);
+      return { frame, fill, target, marker, pair: null, crossedLastFrame: false };
+    }
+
+    const portalA = makePortal(0x3d9dff);
+    const portalB = makePortal(0xff913d);
+    portalA.pair = portalB;
+    portalB.pair = portalA;
+
+    portalA.frame.position.set(-3, 1.3, -12);
+    portalB.frame.position.set(6, 1.3, -2);
+    portalA.frame.rotation.y = Math.PI * 0.2;
+    portalB.frame.rotation.y = -Math.PI * 0.6;
+
+    const portalCam = new THREE.PerspectiveCamera(75, 1, 0.05, 250);
+
+    const keys = new Set();
+    let pointerLocked = false;
+    let envIndex = 0;
+
+    window.addEventListener('keydown', (e) => {
+      keys.add(e.code);
+      if (e.code === 'Digit1') switchEnvironment(0);
+      if (e.code === 'Digit2') switchEnvironment(1);
+      if (e.code === 'Digit3') switchEnvironment(2);
+    });
+    window.addEventListener('keyup', (e) => keys.delete(e.code));
+
+    document.addEventListener('pointerlockchange', () => {
+      pointerLocked = document.pointerLockElement === canvas;
+    });
+
+    canvas.addEventListener('click', () => canvas.requestPointerLock());
+
+    window.addEventListener('mousemove', (e) => {
+      if (!pointerLocked) return;
+      player.yaw -= e.movementX * 0.0024;
+      player.pitch -= e.movementY * 0.0018;
+      player.pitch = THREE.MathUtils.clamp(player.pitch, -1.3, 1.3);
+    });
+
+    let lastTap = 0;
+    window.addEventListener('touchstart', () => {
+      const now = performance.now();
+      if (now - lastTap < 250) {
+        pointerLocked ? document.exitPointerLock() : canvas.requestPointerLock();
+      }
+      lastTap = now;
+    }, { passive: true });
+
+    const joystick = { x: 0, y: 0, active: false, startX: 0, startY: 0 };
+    const joystickEl = document.getElementById('joystick');
+    const stickEl = document.getElementById('stick');
+    joystickEl.addEventListener('pointerdown', (e) => {
+      joystick.active = true;
+      joystick.startX = e.clientX;
+      joystick.startY = e.clientY;
+      joystickEl.setPointerCapture(e.pointerId);
+    });
+    joystickEl.addEventListener('pointermove', (e) => {
+      if (!joystick.active) return;
+      const dx = e.clientX - joystick.startX;
+      const dy = e.clientY - joystick.startY;
+      const max = 38;
+      const len = Math.hypot(dx, dy) || 1;
+      const k = Math.min(len, max) / len;
+      const nx = dx * k;
+      const ny = dy * k;
+      joystick.x = nx / max;
+      joystick.y = ny / max;
+      stickEl.style.transform = `translate3d(${nx}px, ${ny}px, 0)`;
+    });
+    function resetJoystick() {
+      joystick.active = false;
+      joystick.x = joystick.y = 0;
+      stickEl.style.transform = 'translate3d(0,0,0)';
+    }
+    joystickEl.addEventListener('pointerup', resetJoystick);
+    joystickEl.addEventListener('pointercancel', resetJoystick);
+
+    const jumpBtn = document.getElementById('jumpBtn');
+    const runBtn = document.getElementById('runBtn');
+    const lookBtn = document.getElementById('lookBtn');
+    const envBtn = document.getElementById('envBtn');
+
+    let mobileJump = false;
+    jumpBtn.addEventListener('pointerdown', () => mobileJump = true);
+    jumpBtn.addEventListener('pointerup', () => mobileJump = false);
+    jumpBtn.addEventListener('pointercancel', () => mobileJump = false);
+
+    runBtn.addEventListener('pointerdown', () => player.run = true);
+    runBtn.addEventListener('pointerup', () => player.run = false);
+    runBtn.addEventListener('pointercancel', () => player.run = false);
+    lookBtn.addEventListener('click', () => pointerLocked ? document.exitPointerLock() : canvas.requestPointerLock());
+    envBtn.addEventListener('click', () => switchEnvironment((envIndex + 1) % 3));
+
+    function switchEnvironment(i) {
+      envIndex = i;
+      buildEnvironment(i);
+      const p = [
+        { a: [-3, 1.3, -12, Math.PI * 0.2], b: [6, 1.3, -2, -Math.PI * 0.6] },
+        { a: [-8, 1.3, 1, Math.PI * 0.7], b: [8, 1.3, -1, -Math.PI * 0.4] },
+        { a: [-5, 1.3, -5, Math.PI * 0.4], b: [6, 1.3, 6, Math.PI * 1.2] }
+      ][i];
+      portalA.frame.position.set(p.a[0], p.a[1], p.a[2]);
+      portalA.frame.rotation.y = p.a[3];
+      portalB.frame.position.set(p.b[0], p.b[1], p.b[2]);
+      portalB.frame.rotation.y = p.b[3];
+    }
+
+    function resize() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+    switchEnvironment(0);
+
+    const tempVec = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+    const clock = new THREE.Clock();
+
+    function updateMovement(dt) {
+      const mvX = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0) + joystick.x;
+      const mvZ = (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) - (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) + joystick.y;
+      const jump = keys.has('Space') || mobileJump;
+      const running = player.run || keys.has('ShiftLeft') || keys.has('ShiftRight');
+
+      const move = new THREE.Vector3(mvX, 0, mvZ);
+      if (move.lengthSq() > 0.001) move.normalize();
+      move.applyAxisAngle(up, player.yaw);
+
+      const speed = running ? 7.5 : 4.2;
+      player.velocity.x = THREE.MathUtils.damp(player.velocity.x, move.x * speed, 12, dt);
+      player.velocity.z = THREE.MathUtils.damp(player.velocity.z, move.z * speed, 12, dt);
+
+      player.velocity.y -= 18 * dt;
+      if (jump && player.onGround) {
+        player.velocity.y = 7.5;
+        player.onGround = false;
+      }
+
+      player.position.addScaledVector(player.velocity, dt);
+
+      if (player.position.y < player.height * 0.5) {
+        player.position.y = player.height * 0.5;
+        player.velocity.y = 0;
+        player.onGround = true;
+      }
+
+      for (const ob of obstacles) {
+        ob.geometry.computeBoundingBox();
+        const bb = ob.geometry.boundingBox.clone().applyMatrix4(ob.matrixWorld);
+        const px = THREE.MathUtils.clamp(player.position.x, bb.min.x, bb.max.x);
+        const py = THREE.MathUtils.clamp(player.position.y, bb.min.y, bb.max.y);
+        const pz = THREE.MathUtils.clamp(player.position.z, bb.min.z, bb.max.z);
+        tempVec.set(player.position.x - px, player.position.y - py, player.position.z - pz);
+        const d = tempVec.length();
+        const r = player.radius;
+        if (d < r && d > 0.0001) {
+          tempVec.multiplyScalar((r - d) / d);
+          player.position.add(tempVec);
+          if (Math.abs(tempVec.y) > Math.abs(tempVec.x) && Math.abs(tempVec.y) > Math.abs(tempVec.z) && tempVec.y > 0) {
+            player.onGround = true;
+            player.velocity.y = Math.max(0, player.velocity.y);
+          }
+        }
+      }
+
+      yawPivot.rotation.y = player.yaw;
+      pitchPivot.rotation.x = player.pitch;
+      playerGroup.position.copy(player.position);
+      capsule.position.copy(player.position).add(new THREE.Vector3(0, -0.15, 0));
+      capsule.quaternion.setFromAxisAngle(up, player.yaw);
+    }
+
+    function updatePortalView(portal) {
+      const pair = portal.pair;
+      const invFrom = new THREE.Matrix4().copy(portal.frame.matrixWorld).invert();
+      const camMatrix = new THREE.Matrix4().copy(camera.matrixWorld);
+      const localCam = camMatrix.clone().premultiply(invFrom);
+
+      const flip = new THREE.Matrix4().makeRotationY(Math.PI);
+      const targetMatrix = new THREE.Matrix4().multiplyMatrices(pair.frame.matrixWorld, flip).multiply(localCam);
+
+      portalCam.projectionMatrix.copy(camera.projectionMatrix);
+      portalCam.matrixWorld.copy(targetMatrix);
+      portalCam.matrixWorld.decompose(portalCam.position, portalCam.quaternion, portalCam.scale);
+      portalCam.updateMatrixWorld(true);
+
+      portal.fill.visible = false;
+      renderer.setRenderTarget(portal.target);
+      renderer.render(scene, portalCam);
+      renderer.setRenderTarget(null);
+      portal.fill.visible = true;
+    }
+
+    function tryTeleport(portal) {
+      const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(portal.frame.quaternion);
+      const rel = player.position.clone().sub(portal.frame.position);
+      const front = rel.dot(normal);
+
+      if (Math.abs(front) < 0.25) {
+        const local = rel.applyQuaternion(portal.frame.quaternion.clone().invert());
+        if (local.x * local.x + local.y * local.y < 1.0) {
+          if (!portal.crossedLastFrame) {
+            const out = portal.pair;
+            const delta = player.position.clone().sub(portal.frame.position);
+            delta.applyAxisAngle(up, Math.PI + out.frame.rotation.y - portal.frame.rotation.y);
+            player.position.copy(out.frame.position).add(delta).addScaledVector(new THREE.Vector3(0,0,1).applyQuaternion(out.frame.quaternion), 0.6);
+            player.yaw += Math.PI + out.frame.rotation.y - portal.frame.rotation.y;
+            player.velocity.applyAxisAngle(up, Math.PI + out.frame.rotation.y - portal.frame.rotation.y);
+            portal.crossedLastFrame = true;
+            out.crossedLastFrame = true;
+          }
+        }
+      } else {
+        portal.crossedLastFrame = false;
+      }
+    }
+
+    renderer.setAnimationLoop(() => {
+      const dt = Math.min(clock.getDelta(), 0.03);
+      updateMovement(dt);
+
+      tryTeleport(portalA);
+      tryTeleport(portalB);
+
+      updatePortalView(portalA);
+      updatePortalView(portalB);
+
+      renderer.render(scene, camera);
+    });
+  </script>
+</body>
+</html>
