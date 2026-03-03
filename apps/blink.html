@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blink-Intervall-Generator</title>
+    <title>Rot-Blau Blink-Generator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body, html {
@@ -11,13 +11,13 @@
             padding: 0;
             height: 100%;
             overflow: hidden;
-            /* Schneller Übergang für das Blinken */
-            transition: background-color 0.02s ease;
+            /* Sehr schneller Übergang für den harten Wechsel */
+            transition: background-color 0.01s steps(1);
         }
         .controls {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.6);
             backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             transition: opacity 0.4s ease, transform 0.4s ease;
         }
         /* Verstecke Steuerung, wenn inaktiv */
@@ -26,7 +26,6 @@
             transform: translateY(10px);
             pointer-events: none;
         }
-        /* Verhindert Textmarkierung beim Klicken */
         .no-select {
             user-select: none;
         }
@@ -36,25 +35,26 @@
 
     <!-- Steuerungspanel -->
     <div id="ui-panel" class="controls p-8 rounded-2xl shadow-2xl z-10 text-white max-w-md w-full mx-4">
-        <h1 class="text-2xl font-bold mb-6 text-center">Blink-Steuerung</h1>
+        <h1 class="text-2xl font-bold mb-2 text-center text-red-500">Warnung: Intensives Blinken</h1>
+        <p class="text-xs text-gray-300 mb-6 text-center">Wechsel zwischen Rot und Blau</p>
         
         <div class="space-y-6">
-            <!-- Intervall Weiß -->
+            <!-- Intervall Rot -->
             <div>
                 <div class="flex justify-between mb-2">
-                    <label class="text-sm font-medium">Dauer Weiß (ms)</label>
-                    <span id="white-val" class="text-sm font-mono">500</span>
+                    <label class="text-sm font-medium text-red-400">Dauer Rot (ms)</label>
+                    <span id="red-val" class="text-sm font-mono">500</span>
                 </div>
-                <input type="range" id="white-range" min="10" max="2000" value="500" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                <input type="range" id="red-range" min="10" max="2000" value="500" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-600">
             </div>
 
-            <!-- Intervall Schwarz -->
+            <!-- Intervall Blau -->
             <div>
                 <div class="flex justify-between mb-2">
-                    <label class="text-sm font-medium">Dauer Schwarz (ms)</label>
-                    <span id="black-val" class="text-sm font-mono">500</span>
+                    <label class="text-sm font-medium text-blue-400">Dauer Blau (ms)</label>
+                    <span id="blue-val" class="text-sm font-mono">500</span>
                 </div>
-                <input type="range" id="black-range" min="10" max="2000" value="500" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                <input type="range" id="blue-range" min="10" max="2000" value="500" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600">
             </div>
 
             <div class="flex items-center space-x-2">
@@ -64,7 +64,7 @@
 
             <!-- Buttons -->
             <div class="flex flex-col space-y-3 pt-4">
-                <button id="fullscreen-start-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+                <button id="fullscreen-start-btn" class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
                     Vollbild & Start
                 </button>
@@ -73,7 +73,7 @@
                     <button id="start-btn" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors">
                         Start
                     </button>
-                    <button id="stop-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-colors hidden">
+                    <button id="stop-btn" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition-colors hidden">
                         Stopp
                     </button>
                 </div>
@@ -81,16 +81,16 @@
         </div>
 
         <p class="text-xs text-gray-400 mt-6 text-center italic">
-            Bewege die Maus, um das Menü wieder anzuzeigen.<br>
-            Drücke 'ESC' zum Beenden des Vollbilds.
+            Bewege die Maus für das Menü.<br>
+            'ESC' zum Beenden.
         </p>
     </div>
 
     <script>
-        const whiteRange = document.getElementById('white-range');
-        const blackRange = document.getElementById('black-range');
-        const whiteVal = document.getElementById('white-val');
-        const blackVal = document.getElementById('black-val');
+        const redRange = document.getElementById('red-range');
+        const blueRange = document.getElementById('blue-range');
+        const redVal = document.getElementById('red-val');
+        const blueVal = document.getElementById('blue-val');
         const syncCheckbox = document.getElementById('sync-checkbox');
         const startBtn = document.getElementById('start-btn');
         const stopBtn = document.getElementById('stop-btn');
@@ -101,34 +101,32 @@
         let timer = null;
         let uiTimeout = null;
 
-        // Update der Anzeige
         function updateValues() {
-            whiteVal.textContent = whiteRange.value;
-            blackVal.textContent = blackRange.value;
+            redVal.textContent = redRange.value;
+            blueVal.textContent = blueRange.value;
             if (syncCheckbox.checked) {
-                blackRange.value = whiteRange.value;
-                blackVal.textContent = whiteRange.value;
+                blueRange.value = redRange.value;
+                blueVal.textContent = redRange.value;
             }
         }
 
-        whiteRange.addEventListener('input', () => {
-            if (syncCheckbox.checked) {
-                blackRange.value = whiteRange.value;
-            }
+        redRange.addEventListener('input', () => {
+            if (syncCheckbox.checked) blueRange.value = redRange.value;
             updateValues();
         });
 
-        blackRange.addEventListener('input', updateValues);
+        blueRange.addEventListener('input', updateValues);
 
-        function toggleFlash(isWhite) {
+        // Die eigentliche Blink-Logik (Wechsel zwischen Rot und Blau)
+        function toggleFlash(isRed) {
             if (!isRunning) return;
             
-            if (isWhite) {
-                body.style.backgroundColor = 'white';
-                timer = setTimeout(() => toggleFlash(false), parseInt(whiteRange.value));
+            if (isRed) {
+                body.style.backgroundColor = 'red';
+                timer = setTimeout(() => toggleFlash(false), parseInt(redRange.value));
             } else {
-                body.style.backgroundColor = 'black';
-                timer = setTimeout(() => toggleFlash(true), parseInt(blackRange.value));
+                body.style.backgroundColor = 'blue';
+                timer = setTimeout(() => toggleFlash(true), parseInt(blueRange.value));
             }
         }
 
@@ -138,7 +136,7 @@
             fullscreenBtn.classList.add('hidden');
             stopBtn.classList.remove('hidden');
             toggleFlash(true);
-            hideUI(); // UI sofort verstecken
+            hideUI();
         }
 
         function stopBlinking() {
@@ -154,50 +152,33 @@
         startBtn.addEventListener('click', startBlinking);
         stopBtn.addEventListener('click', stopBlinking);
 
-        // Vollbild-Logik
         fullscreenBtn.addEventListener('click', () => {
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen().catch(err => {
-                    console.error(`Fehler beim Aktivieren des Vollbildmodus: ${err.message}`);
+                    console.error("Vollbild-Fehler:", err.message);
                 });
             }
             startBlinking();
         });
 
-        // UI Auto-Hide Logik
         function hideUI() {
-            if (isRunning) {
-                body.classList.add('ui-hidden');
-            }
+            if (isRunning) body.classList.add('ui-hidden');
         }
 
         function showUI() {
             body.classList.remove('ui-hidden');
             clearTimeout(uiTimeout);
-            if (isRunning) {
-                uiTimeout = setTimeout(hideUI, 2000); // Versteckt UI nach 2 Sekunden Inaktivität
-            }
+            if (isRunning) uiTimeout = setTimeout(hideUI, 2000);
         }
 
-        // Event-Listener für Interaktion
         window.addEventListener('mousemove', showUI);
         window.addEventListener('touchstart', showUI);
         window.addEventListener('keydown', (e) => {
             showUI();
-            if (e.key === 'Escape' && isRunning) {
-                stopBlinking();
-            }
+            if (e.key === 'Escape' && isRunning) stopBlinking();
         });
 
-        // Überwache Vollbild-Änderungen (z.B. ESC Taste)
-        document.addEventListener('fullscreenchange', () => {
-            if (!document.fullscreenElement && isRunning) {
-                // Optional: Stoppe Blinken, wenn Vollbild verlassen wird
-                // stopBlinking(); 
-            }
-        });
-
-        showUI();
+        updateValues();
     </script>
 </body>
 </html>
