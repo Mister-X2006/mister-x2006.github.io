@@ -1,0 +1,193 @@
+:root {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --panel: #161d27;
+  --panel-2: #111720;
+  --text: #e5ebf5;
+  --muted: #9aabc0;
+  --accent: #4ca9ff;
+  --border: #273142;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100dvh;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+  padding: 0.55rem 0.75rem;
+}
+.brand h1 { margin: 0; font-size: 1rem; }
+.brand small { color: var(--muted); }
+.actions { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+
+button, select {
+  background: #213045;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  padding: 0.42rem 0.68rem;
+  font-size: 0.8rem;
+}
+button:hover { border-color: var(--accent); }
+
+.layout {
+  display: grid;
+  grid-template-columns: 300px 1fr 320px;
+  min-height: calc(100dvh - 61px);
+}
+
+.panel {
+  background: var(--panel-2);
+  padding: 0.6rem;
+  overflow: auto;
+  border-right: 1px solid var(--border);
+}
+.layout > .panel:last-child {
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+.panel-block {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  margin-bottom: 0.6rem;
+  padding: 0.55rem;
+}
+
+.viewport-wrap {
+  position: relative;
+  min-height: 440px;
+}
+.viewport-toolbar {
+  position: absolute;
+  z-index: 2;
+  left: 0.75rem;
+  top: 0.75rem;
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+}
+#project-name {
+  background: #0008;
+  border: 1px solid #ffffff20;
+  border-radius: 0.35rem;
+  padding: 0.3rem 0.45rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+#viewport { width: 100%; height: 100%; display: block; }
+.hint {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  background: #0009;
+  border: 1px solid #ffffff24;
+  border-radius: 0.45rem;
+  font-size: 0.72rem;
+  padding: 0.32rem 0.5rem;
+  color: var(--muted);
+}
+
+h2 { font-size: 0.82rem; color: var(--muted); margin: 0 0 0.45rem; text-transform: uppercase; }
+.button-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.36rem;
+}
+
+.entity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.33rem;
+}
+.entity-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  background: #1d2632;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  padding: 0.42rem;
+}
+.entity-list li.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px #4ca9ff44 inset;
+}
+.stack { display: grid; gap: 0.45rem; margin-top: 0.55rem; }
+
+label { display: grid; gap: 0.18rem; font-size: 0.72rem; }
+input[type="range"] { width: 100%; }
+
+.card {
+  background: #1b2431;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  padding: 0.45rem;
+  display: grid;
+  gap: 0.38rem;
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+}
+.card-title { font-size: 0.8rem; }
+.small { font-size: 0.7rem; color: var(--muted); }
+
+.blueprint-window {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  width: min(460px, calc(100vw - 2rem));
+  max-height: min(75dvh, 700px);
+  overflow: auto;
+  background: #131a25;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  padding: 0.65rem;
+  box-shadow: 0 14px 38px #0008;
+  z-index: 25;
+  display: none;
+}
+.blueprint-window.open { display: block; }
+.blueprint-window-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.45rem;
+}
+.blueprint-window-header h2 { margin: 0; }
+
+@media (max-width: 1050px) {
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(320px, 46dvh) auto;
+  }
+  .panel,
+  .layout > .panel:last-child {
+    border: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .blueprint-window {
+    left: 0.75rem;
+    right: 0.75rem;
+    width: auto;
+    bottom: 0.75rem;
+  }
+}
