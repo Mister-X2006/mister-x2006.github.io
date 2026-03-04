@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Three Forge Studio (Blender/UE style)</title>
+  <meta name="description" content="Blender/UE-inspired modular no-code three.js editor with blueprint graph blocks, saves, and export." />
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Three Forge Studio</h1>
+      <small>Editor Mode: Level + Blueprint + Export</small>
+    </div>
+    <div class="actions">
+      <button id="new-project-btn">New Project</button>
+      <button id="save-project-btn">Save</button>
+      <button id="load-project-btn">Import</button>
+      <button id="export-html-btn">Build HTML</button>
+      <button id="export-zip-btn">Build ZIP</button>
+      <button id="toggle-blueprint-window-btn">Blueprint Window</button>
+      <button id="play-pause-btn">Play In Editor</button>
+      <input id="import-file-input" type="file" accept="application/json" hidden />
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="panel">
+      <div class="panel-block">
+        <h2>Add (Blender-style)</h2>
+        <label>
+          <span>Actor Type</span>
+          <select id="actor-type-select">
+            <option value="box">Mesh > Cube</option>
+            <option value="sphere">Mesh > UV Sphere</option>
+            <option value="plane">Mesh > Plane</option>
+            <option value="capsule">Mesh > Capsule</option>
+            <option value="point-light">Light > Point</option>
+            <option value="directional-light">Light > Directional</option>
+          </select>
+        </label>
+        <button id="add-actor-btn">Add Actor</button>
+      </div>
+
+      <div class="panel-block">
+        <h2>World Outliner</h2>
+        <ul id="entity-list" class="entity-list"></ul>
+      </div>
+    </aside>
+
+    <section class="viewport-wrap">
+      <div class="viewport-toolbar">
+        <button id="focus-selected-btn">Focus Selected</button>
+        <span id="project-name"></span>
+      </div>
+      <canvas id="viewport"></canvas>
+      <div class="hint">Orbit: drag • Pan: right-drag • Zoom: wheel/pinch • Touch controls enabled</div>
+    </section>
+
+    <aside class="panel">
+      <div class="panel-block">
+        <h2>Details / Inspector</h2>
+        <div id="transform-editor" class="stack"></div>
+      </div>
+    </aside>
+  </main>
+
+  <section id="blueprint-window" class="blueprint-window" aria-hidden="true">
+    <div class="blueprint-window-header">
+      <h2>Blueprint Event Graph</h2>
+      <button id="close-blueprint-window-btn">Close</button>
+    </div>
+    <div class="button-grid">
+      <button data-block="spin">Add Tick Rotate</button>
+      <button data-block="bob">Add Sine Float</button>
+      <button data-block="orbit">Add Orbit Around</button>
+      <button data-block="keyboard-move">Add Input Move</button>
+    </div>
+    <div id="blueprint-list" class="stack"></div>
+  </section>
+
+  <template id="range-input-template">
+    <label>
+      <span class="label"></span>
+      <input type="range" min="-20" max="20" step="0.1" />
+    </label>
+  </template>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
