@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Perfekter Kreis</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #222;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none; /* Verhindert das Scrollen am Handy beim Zeichnen */
+        }
+        #ui {
+            position: absolute;
+            top: 10%;
+            width: 100%;
+            text-align: center;
+            pointer-events: none; /* Klicks gehen durch den Text aufs Canvas */
+        }
+        #score {
+            font-size: 4rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        #info {
+            font-size: 1.2rem;
+            color: #aaa;
+        }
+        canvas {
+            display: block;
+            cursor: crosshair;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div id="score">0.0%</div>
+        <div id="info">Zeichne einen perfekten Kreis um den Punkt</div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score');
+        const infoDisplay = document.getElementById('info');
+
+        let width, height, centerX, centerY;
+        let points = [];
+        let isDrawing = false;
+
+        function init() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            centerX = width / 2;
+            centerY = height / 2;
+            resetCanvas();
+        }
+
+        function resetCanvas() {
+            ctx.clearRect(0, 0, width, height);
+            
+            // Mittelpunkt zeichnen
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#ff4757';
+            ctx.fill();
+            
+            points = [];
+            scoreDisplay.innerText = "0.0%";
+            scoreDisplay.style.color = "white";
+            infoDisplay.innerText = "Zeichne einen perfekten Kreis um den Punkt";
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            resetCanvas();
+            addPoint(e);
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            addPoint(e);
+            
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = 'white';
+            
+            ctx.beginPath();
+            ctx.moveTo(points[points.length - 2].x, points[points.length - 2].y);
+            ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+            ctx.stroke();
+        }
+
+        function stopDrawing() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            calculateScore();
+        }
+
+        function addPoint(e) {
+            e.preventDefault();
+            let x, y;
+            if (e.touches) {
+                x = e.touches[0].clientX;
+                y = e.touches[0].clientY;
+            } else {
+                x = e.clientX;
+                y = e.clientY;
+            }
+            points.push({ x, y });
+        }
+
+        function calculateScore() {
+            if (points.length < 20) {
+                infoDisplay.innerText = "Linie zu kurz! Versuch es nochmal.";
+                return;
+            }
+
+            // Prüfen, ob der Kreis in etwa geschlossen ist
+            const startNode = points[0];
+            const endNode = points[points.length - 1];
+            const gap = Math.hypot(endNode.x - startNode.x, endNode.y - startNode.y);
+
+            let totalRadius = 0;
+            let radii = [];
+
+            // Radius für jeden Punkt berechnen
+            points.forEach(p => {
+                const r = Math.hypot(p.x - centerX, p.y - centerY);
+                radii.push(r);
+                totalRadius += r;
+            });
+
+            const avgRadius = totalRadius / points.length;
+
+            if (gap > avgRadius * 0.8) {
+                infoDisplay.innerText = "Du musst den Kreis schließen!";
+                scoreDisplay.style.color = "#ff4757";
+                return;
+            }
+
+            // Abweichung vom durchschnittlichen Radius berechnen
+            let totalDeviation = 0;
+            radii.forEach(r => {
+                totalDeviation += Math.abs(r - avgRadius);
+            });
+
+            const avgDeviation = totalDeviation / points.length;
+
+            // Prozentwert berechnen (je kleiner die Abweichung, desto näher an 100%)
+            let score = 100 - (avgDeviation / avgRadius) * 100;
+            score = Math.max(0, Math.min(100, score));
+
+            scoreDisplay.innerText = score.toFixed(1) + "%";
+            
+            if (score > 95) {
+                infoDisplay.innerText = "Hervorragend!";
+                scoreDisplay.style.color = "#2ed573";
+            } else if (score > 85) {
+                infoDisplay.innerText = "Ziemlich gut!";
+                scoreDisplay.style.color = "#1e90ff";
+            } else {
+                infoDisplay.innerText = "Das geht noch runder...";
+                scoreDisplay.style.color = "white";
+            }
+        }
+
+        window.addEventListener('resize', init);
+
+        // Maus-Events
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseleave', stopDrawing);
+
+        // Touch-Events für Smartphones/Tablets
+        canvas.addEventListener('touchstart', startDrawing, {passive: false});
+        canvas.addEventListener('touchmove', draw, {passive: false});
+        canvas.addEventListener('touchend', stopDrawing);
+
+        // Start
+        init();
+
+    </script>
+</body>
+</html>
