@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>EXPANSE CONTROL</title>
+
+<!-- Orbitron font from Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&display=swap" rel="stylesheet">
+
+<style>
+:root{
+    --bg:#05070b;
+    --panel:#0b1118;
+    --line:#2de2e6;
+    --line-dim:#155a66;
+    --warn:#ff8a00;
+    --danger:#ff3864;
+    --text:#dffcff;
+    --green:#00ffa3;
+}
+
+*{
+    box-sizing:border-box;
+    margin:0;
+    padding:0;
+}
+
+body{
+    background:
+        radial-gradient(circle at top, rgba(45,226,230,0.08), transparent 30%),
+        linear-gradient(180deg,#040608,#070d12 70%);
+    color:var(--text);
+    font-family:'Orbitron',sans-serif;
+    overflow:hidden;
+    height:100vh;
+}
+
+body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        rgba(255,255,255,0.03),
+        rgba(255,255,255,0.03) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+    pointer-events:none;
+    mix-blend-mode:soft-light;
+    opacity:.25;
+}
+
+.grid{
+    display:grid;
+    grid-template-columns: 320px 1fr 320px;
+    grid-template-rows: 90px 1fr 120px;
+    gap:16px;
+    padding:16px;
+    height:100vh;
+}
+
+.panel{
+    position:relative;
+    background:rgba(10,15,20,0.85);
+    border:1px solid var(--line-dim);
+    box-shadow:
+        0 0 20px rgba(45,226,230,0.08),
+        inset 0 0 30px rgba(45,226,230,0.04);
+    overflow:hidden;
+}
+
+.panel::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    border:1px solid rgba(45,226,230,0.2);
+    clip-path: polygon(
+        0 0,
+        calc(100% - 18px) 0,
+        100% 18px,
+        100% 100%,
+        18px 100%,
+        0 calc(100% - 18px)
+    );
+    pointer-events:none;
+}
+
+.header{
+    grid-column:1/4;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 24px;
+}
+
+.header h1{
+    letter-spacing:6px;
+    font-size:2rem;
+    color:var(--line);
+    text-shadow:0 0 12px rgba(45,226,230,.7);
+}
+
+.status-bar{
+    display:flex;
+    gap:18px;
+    align-items:center;
+}
+
+.status{
+    padding:8px 12px;
+    border:1px solid var(--line-dim);
+    font-size:.8rem;
+    color:var(--green);
+    background:rgba(0,255,163,.05);
+}
+
+.left{
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+}
+
+.right{
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+}
+
+.center{
+    position:relative;
+    overflow:hidden;
+}
+
+.section-title{
+    padding:12px 16px;
+    border-bottom:1px solid rgba(45,226,230,.15);
+    color:var(--line);
+    font-size:.9rem;
+    letter-spacing:3px;
+}
+
+.content{
+    padding:16px;
+}
+
+.radar{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+
+.radar-circle{
+    width:520px;
+    height:520px;
+    border-radius:50%;
+    border:2px solid rgba(45,226,230,.25);
+    position:relative;
+    overflow:hidden;
+    box-shadow:0 0 30px rgba(45,226,230,.15);
+}
+
+.radar-circle::before,
+.radar-circle::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    border-radius:50%;
+}
+
+.radar-circle::before{
+    background:
+        radial-gradient(circle, transparent 59%, rgba(45,226,230,.2) 60%, transparent 61%),
+        radial-gradient(circle, transparent 39%, rgba(45,226,230,.18) 40%, transparent 41%),
+        radial-gradient(circle, transparent 19%, rgba(45,226,230,.14) 20%, transparent 21%);
+}
+
+.sweep{
+    position:absolute;
+    width:50%;
+    height:2px;
+    background:linear-gradient(to right, rgba(45,226,230,.8), transparent);
+    top:50%;
+    left:50%;
+    transform-origin:left center;
+    animation:spin 5s linear infinite;
+    box-shadow:0 0 20px rgba(45,226,230,.8);
+}
+
+@keyframes spin{
+    from{ transform:rotate(0deg);}
+    to{ transform:rotate(360deg);}
+}
+
+.target{
+    position:absolute;
+    width:12px;
+    height:12px;
+    border-radius:50%;
+    background:var(--warn);
+    box-shadow:0 0 12px var(--warn);
+    animation:pulse 2s infinite;
+}
+
+@keyframes pulse{
+    0%,100%{ transform:scale(1); opacity:1;}
+    50%{ transform:scale(1.8); opacity:.5;}
+}
+
+.target:nth-child(2){ top:22%; left:60%;}
+.target:nth-child(3){ top:67%; left:40%;}
+.target:nth-child(4){ top:48%; left:73%;}
+
+.metrics{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+}
+
+.metric{
+    border:1px solid rgba(45,226,230,.15);
+    padding:16px;
+    background:rgba(45,226,230,.03);
+}
+
+.metric h3{
+    font-size:.7rem;
+    color:var(--line);
+    margin-bottom:8px;
+}
+
+.metric .value{
+    font-size:1.5rem;
+    color:var(--green);
+}
+
+.log{
+    height:220px;
+    overflow:auto;
+    font-size:.8rem;
+    line-height:1.7;
+    color:#8fdde7;
+}
+
+.log-entry{
+    margin-bottom:8px;
+    border-left:2px solid var(--line-dim);
+    padding-left:8px;
+}
+
+.footer{
+    grid-column:1/4;
+    display:flex;
+    align-items:center;
+    justify-content:space-around;
+    padding:16px;
+}
+
+.control{
+    width:180px;
+    height:70px;
+    background:rgba(45,226,230,.05);
+    border:1px solid rgba(45,226,230,.2);
+    position:relative;
+    cursor:pointer;
+    transition:.2s;
+    overflow:hidden;
+}
+
+.control:hover{
+    transform:translateY(-2px);
+    box-shadow:0 0 16px rgba(45,226,230,.25);
+}
+
+.control:active{
+    transform:scale(.98);
+}
+
+.control span{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    letter-spacing:2px;
+}
+
+.warning{
+    color:var(--warn);
+}
+
+.danger{
+    color:var(--danger);
+}
+
+svg{
+    width:22px;
+    height:22px;
+    fill:none;
+    stroke:currentColor;
+    stroke-width:2;
+    margin-right:10px;
+}
+
+.icon-line{
+    display:flex;
+    align-items:center;
+    margin-bottom:14px;
+}
+
+.small{
+    font-size:.7rem;
+    opacity:.7;
+}
+
+.blink{
+    animation:blink 1s infinite;
+}
+
+@keyframes blink{
+    0%,49%{opacity:1}
+    50%,100%{opacity:.3}
+}
+
+@media(max-width:1200px){
+    .grid{
+        grid-template-columns:1fr;
+        grid-template-rows:90px auto auto auto 120px;
+        overflow:auto;
+    }
+
+    .header,
+    .footer{
+        grid-column:auto;
+    }
+
+    .radar-circle{
+        width:320px;
+        height:320px;
+    }
+}
+</style>
+</head>
+<body>
+
+<div class="grid">
+
+    <div class="panel header">
+        <h1>UNN CONTROL // ROCINANTE</h1>
+
+        <div class="status-bar">
+            <div class="status">CORE ONLINE</div>
+            <div class="status warning blink">PROX ALERT</div>
+            <div class="status">FTL STANDBY</div>
+        </div>
+    </div>
+
+    <div class="left">
+
+        <div class="panel">
+            <div class="section-title">SYSTEM STATUS</div>
+
+            <div class="content">
+
+                <div class="icon-line">
+                    <!-- Open-source inline SVG -->
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 2v20"/>
+                        <path d="M2 12h20"/>
+                    </svg>
+                    Reactor Core Stable
+                </div>
+
+                <div class="icon-line">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 2l4 8-4 12-4-12z"/>
+                    </svg>
+                    Epstein Drive Armed
+                </div>
+
+                <div class="icon-line warning">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 3l9 18H3z"/>
+                        <path d="M12 9v4"/>
+                        <circle cx="12" cy="17" r="1"/>
+                    </svg>
+                    Radiation Spike Sector 7
+                </div>
+
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="section-title">TELEMETRY</div>
+
+            <div class="content metrics">
+
+                <div class="metric">
+                    <h3>VELOCITY</h3>
+                    <div class="value">24.3c</div>
+                </div>
+
+                <div class="metric">
+                    <h3>FUEL</h3>
+                    <div class="value">83%</div>
+                </div>
+
+                <div class="metric">
+                    <h3>HULL</h3>
+                    <div class="value">97%</div>
+                </div>
+
+                <div class="metric">
+                    <h3>TEMP</h3>
+                    <div class="value">402K</div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <div class="panel center">
+
+        <div class="radar">
+            <div class="radar-circle">
+                <div class="sweep"></div>
+
+                <div class="target"></div>
+                <div class="target"></div>
+                <div class="target"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="right">
+
+        <div class="panel">
+            <div class="section-title">SHIP LOG</div>
+
+            <div class="content log" id="log">
+                <div class="log-entry">[04:02] Docking sequence completed.</div>
+                <div class="log-entry">[04:15] Long-range scan initialized.</div>
+                <div class="log-entry">[04:18] Unknown thermal signature detected.</div>
+                <div class="log-entry warning">[04:21] Tactical alert raised.</div>
+                <div class="log-entry">[04:24] AI navigation synced.</div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="section-title">AI CORE</div>
+
+            <div class="content">
+                <p style="line-height:1.8;">
+                    Autonomous combat and navigation matrix active.
+                </p>
+
+                <br>
+
+                <p class="small">
+                    Latency: 3ms<br>
+                    Quantum Link: Stable<br>
+                    Crew Biometrics: Nominal
+                </p>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="panel footer">
+
+        <div class="control" data-sound="click">
+            <span>SCAN</span>
+        </div>
+
+        <div class="control" data-sound="alert">
+            <span>TARGET</span>
+        </div>
+
+        <div class="control" data-sound="engine">
+            <span>ENGAGE</span>
+        </div>
+
+        <div class="control danger" data-sound="alarm">
+            <span>LOCKDOWN</span>
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+/*
+    SOUND SYSTEM
+    -------------------------
+    Uses WebAudio API.
+    No external sound files needed.
+    Works offline forever.
+*/
+
+const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+const audioCtx = new AudioContextClass();
+
+function beep(freq = 440, duration = 0.08, type = 'sine', volume = 0.03){
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = type;
+    osc.frequency.value = freq;
+
+    gain.gain.value = volume;
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+
+    gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        audioCtx.currentTime + duration
+    );
+
+    osc.stop(audioCtx.currentTime + duration);
+}
+
+function playClick(){
+    beep(900,0.05,'square');
+    setTimeout(()=>beep(600,0.04,'square'),40);
+}
+
+function playAlert(){
+    beep(350,0.15,'sawtooth');
+    setTimeout(()=>beep(520,0.15,'sawtooth'),150);
+}
+
+function playEngine(){
+    let i = 0;
+    const interval = setInterval(()=>{
+        beep(80 + i*15,0.12,'triangle',0.04);
+        i++;
+        if(i > 10) clearInterval(interval);
+    },80);
+}
+
+function playAlarm(){
+    let count = 0;
+
+    const interval = setInterval(()=>{
+        beep(220,0.12,'square',0.05);
+        setTimeout(()=>beep(180,0.12,'square',0.05),120);
+
+        count++;
+
+        if(count > 4){
+            clearInterval(interval);
+        }
+    },250);
+}
+
+document.querySelectorAll('.control').forEach(btn=>{
+
+    btn.addEventListener('click',()=>{
+
+        const type = btn.dataset.sound;
+
+        if(type === 'click') playClick();
+        if(type === 'alert') playAlert();
+        if(type === 'engine') playEngine();
+        if(type === 'alarm') playAlarm();
+
+        addLog(`User activated ${btn.innerText}`);
+    });
+
+});
+
+function addLog(text){
+
+    const log = document.getElementById('log');
+
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+
+    const time = new Date().toLocaleTimeString();
+
+    div.innerText = `[${time}] ${text}`;
+
+    log.prepend(div);
+
+    if(log.children.length > 20){
+        log.removeChild(log.lastChild);
+    }
+}
+
+/*
+    RANDOM STATUS EVENTS
+*/
+
+const randomEvents = [
+    'Sensor echo received.',
+    'Encrypted relay intercepted.',
+    'Thruster vector recalibrated.',
+    'AI pathfinding updated.',
+    'Debris field mapped.',
+    'External ping detected.',
+    'Cooling cycle synchronized.',
+    'Reactor efficiency improved.',
+    'Anomaly drift increased.'
+];
+
+setInterval(()=>{
+
+    const msg =
+        randomEvents[
+            Math.floor(Math.random()*randomEvents.length)
+        ];
+
+    addLog(msg);
+
+    if(Math.random() > 0.7){
+        playClick();
+    }
+
+},5000);
+
+/*
+    Small ambient startup tone
+*/
+
+setTimeout(()=>{
+    playEngine();
+},700);
+</script>
+
+</body>
+                      </html>
