@@ -1,0 +1,867 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum GUI Sound Forge</title>
+<style>
+:root{
+    --bg:#0d1117;
+    --panel:#161b22;
+    --panel2:#1f2937;
+    --text:#e6edf3;
+    --accent:#4ea1ff;
+    --border:#30363d;
+    --danger:#ff6b6b;
+    --good:#4ade80;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+}
+body.light{
+    --bg:#f3f5f8;
+    --panel:#ffffff;
+    --panel2:#edf1f7;
+    --text:#1f2937;
+    --accent:#0066ff;
+    --border:#cfd8e3;
+}
+*{
+    box-sizing:border-box;
+    font-family:Inter,Segoe UI,Arial,sans-serif;
+}
+body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    overflow:hidden;
+}
+#app{
+    display:grid;
+    grid-template-columns:280px 1fr;
+    height:100vh;
+}
+.sidebar{
+    background:var(--panel);
+    border-right:1px solid var(--border);
+    padding:18px;
+    overflow:auto;
+}
+.main{
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+}
+.topbar{
+    height:60px;
+    background:var(--panel);
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 18px;
+}
+.workspace{
+    flex:1;
+    overflow:auto;
+    padding:18px;
+}
+.panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:16px;
+    margin-bottom:18px;
+    box-shadow:var(--shadow);
+}
+h1,h2,h3{
+    margin-top:0;
+}
+button,select,input{
+    border:none;
+    outline:none;
+}
+button{
+    background:var(--accent);
+    color:white;
+    padding:10px 14px;
+    border-radius:10px;
+    cursor:pointer;
+    transition:.2s;
+}
+button:hover{
+    transform:translateY(-2px);
+}
+button.secondary{
+    background:var(--panel2);
+    color:var(--text);
+}
+button.danger{
+    background:var(--danger);
+}
+.grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:14px;
+}
+.control{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    margin-bottom:14px;
+}
+label{
+    font-size:13px;
+    opacity:.85;
+}
+input[type=range]{
+    width:100%;
+}
+select,input[type=text]{
+    background:var(--panel2);
+    color:var(--text);
+    padding:10px;
+    border-radius:10px;
+    border:1px solid var(--border);
+}
+.dropdown{
+    position:relative;
+}
+.dropdown-content{
+    display:none;
+    position:absolute;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:14px;
+    min-width:220px;
+    z-index:10;
+    top:45px;
+    box-shadow:var(--shadow);
+}
+.dropdown-content button{
+    width:100%;
+    border-radius:0;
+    background:transparent;
+    text-align:left;
+    padding:12px;
+}
+.dropdown.open .dropdown-content{
+    display:block;
+}
+.window{
+    position:absolute;
+    width:420px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:18px;
+    top:120px;
+    left:120px;
+    box-shadow:var(--shadow);
+    overflow:hidden;
+    resize:both;
+}
+.window-header{
+    padding:12px;
+    background:var(--panel2);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    cursor:move;
+}
+.window-content{
+    padding:16px;
+    max-height:400px;
+    overflow:auto;
+}
+.hidden{
+    display:none;
+}
+.badge{
+    background:var(--panel2);
+    padding:6px 10px;
+    border-radius:999px;
+    font-size:12px;
+}
+.timeline{
+    height:140px;
+    background:linear-gradient(90deg,var(--panel2),transparent);
+    border-radius:14px;
+    position:relative;
+    overflow:hidden;
+}
+.wave{
+    position:absolute;
+    width:100%;
+    height:100%;
+}
+footer{
+    font-size:12px;
+    opacity:.7;
+    text-align:center;
+}
+.mobile #app{
+    grid-template-columns:1fr;
+}
+.mobile .sidebar{
+    height:300px;
+}
+.mobile .window{
+    width:92vw;
+    left:4vw !important;
+}
+</style>
+</head>
+<body>
+<div id="app">
+    <div class="sidebar">
+        <h1>Quantum GUI Sound Forge</h1>
+        <div class="badge" id="deviceInfo"></div>
+
+        <div class="panel">
+            <h3>Sound Presets</h3>
+            <div class="control">
+                <label>Preset</label>
+                <select id="preset">
+                    <option>Windows Alert</option>
+                    <option>Mac Notification</option>
+                    <option>Cyber Click</option>
+                    <option>Success</option>
+                    <option>Error</option>
+                    <option>Futuristic Ping</option>
+                    <option>Soft Tap</option>
+                    <option>Warning Alarm</option>
+                    <option>UI Hover</option>
+                </select>
+            </div>
+            <button onclick="generatePreset()">Generate Preset</button>
+        </div>
+
+        <div class="panel">
+            <h3>Oscillator</h3>
+
+            <div class="control">
+                <label>Wave Type</label>
+                <select id="waveType">
+                    <option>sine</option>
+                    <option>triangle</option>
+                    <option>sawtooth</option>
+                    <option>square</option>
+                </select>
+            </div>
+
+            <div class="control">
+                <label>Frequency</label>
+                <input type="range" min="50" max="3000" value="440" id="freq">
+            </div>
+
+            <div class="control">
+                <label>Duration</label>
+                <input type="range" min="0.05" max="3" step="0.01" value="0.4" id="duration">
+            </div>
+
+            <div class="control">
+                <label>Volume</label>
+                <input type="range" min="0" max="1" step="0.01" value="0.5" id="volume">
+            </div>
+
+            <div class="control">
+                <label>Reverb</label>
+                <input type="range" min="0" max="1" step="0.01" value="0.2" id="reverb">
+            </div>
+
+            <div class="control">
+                <label>Delay</label>
+                <input type="range" min="0" max="1" step="0.01" value="0.1" id="delay">
+            </div>
+
+            <button onclick="playSound()">Play</button>
+            <button class="secondary" onclick="randomizeSound()">Randomize</button>
+        </div>
+
+        <div class="panel">
+            <h3>Project</h3>
+            <button onclick="saveProject()">Save</button>
+            <button class="secondary" onclick="loadProject()">Load</button>
+            <button onclick="exportWav()">Export WAV</button>
+            <button class="danger" onclick="clearProject()">Reset</button>
+        </div>
+
+        <footer>
+            Realistic GUI audio synthesis engine powered by Web Audio API.
+        </footer>
+    </div>
+
+    <div class="main">
+        <div class="topbar">
+            <div style="display:flex;gap:10px;">
+                <div class="dropdown" id="menuDropdown">
+                    <button class="secondary" onclick="toggleDropdown()">Menu ▾</button>
+                    <div class="dropdown-content">
+                        <button onclick="openWindow('mixerWindow')">Mixer</button>
+                        <button onclick="openWindow('advancedWindow')">Advanced FX</button>
+                        <button onclick="openWindow('aboutWindow')">About</button>
+                    </div>
+                </div>
+
+                <button class="secondary" onclick="toggleTheme()">Dark / Light</button>
+            </div>
+
+            <div>
+                <span class="badge" id="status">Ready</span>
+            </div>
+        </div>
+
+        <div class="workspace">
+            <div class="panel">
+                <h2>Live Waveform</h2>
+                <canvas id="waveCanvas" width="1200" height="200"></canvas>
+            </div>
+
+            <div class="grid">
+                <div class="panel">
+                    <h3>Envelope</h3>
+                    <div class="control">
+                        <label>Attack</label>
+                        <input type="range" id="attack" min="0" max="1" step="0.01" value="0.01">
+                    </div>
+
+                    <div class="control">
+                        <label>Decay</label>
+                        <input type="range" id="decay" min="0" max="2" step="0.01" value="0.2">
+                    </div>
+
+                    <div class="control">
+                        <label>Sustain</label>
+                        <input type="range" id="sustain" min="0" max="1" step="0.01" value="0.4">
+                    </div>
+
+                    <div class="control">
+                        <label>Release</label>
+                        <input type="range" id="release" min="0" max="3" step="0.01" value="0.4">
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>Filters</h3>
+
+                    <div class="control">
+                        <label>Filter Type</label>
+                        <select id="filterType">
+                            <option>lowpass</option>
+                            <option>highpass</option>
+                            <option>bandpass</option>
+                        </select>
+                    </div>
+
+                    <div class="control">
+                        <label>Cutoff</label>
+                        <input type="range" min="50" max="12000" value="2000" id="cutoff">
+                    </div>
+
+                    <div class="control">
+                        <label>Resonance</label>
+                        <input type="range" min="0.1" max="30" step="0.1" value="1" id="resonance">
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>Modulation</h3>
+
+                    <div class="control">
+                        <label>LFO Frequency</label>
+                        <input type="range" min="0" max="40" step="0.1" value="3" id="lfoFreq">
+                    </div>
+
+                    <div class="control">
+                        <label>LFO Depth</label>
+                        <input type="range" min="0" max="1000" step="1" value="30" id="lfoDepth">
+                    </div>
+
+                    <div class="control">
+                        <label>Stereo Spread</label>
+                        <input type="range" min="0" max="1" step="0.01" value="0.4" id="stereo">
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>Sound Timeline</h2>
+                <div class="timeline">
+                    <canvas class="wave" id="timelineCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="window hidden" id="mixerWindow">
+    <div class="window-header">
+        <span>Mixer</span>
+        <button onclick="closeWindow('mixerWindow')">✕</button>
+    </div>
+    <div class="window-content">
+        <div class="control">
+            <label>Master Gain</label>
+            <input type="range" min="0" max="1" step="0.01" value="0.8" id="masterGain">
+        </div>
+
+        <div class="control">
+            <label>Limiter</label>
+            <input type="range" min="0" max="1" step="0.01" value="0.7" id="limiter">
+        </div>
+    </div>
+</div>
+
+<div class="window hidden" id="advancedWindow">
+    <div class="window-header">
+        <span>Advanced FX</span>
+        <button onclick="closeWindow('advancedWindow')">✕</button>
+    </div>
+    <div class="window-content">
+        <div class="control">
+            <label>Noise Layer</label>
+            <input type="range" min="0" max="1" step="0.01" value="0.05" id="noiseLayer">
+        </div>
+
+        <div class="control">
+            <label>Bit Crush</label>
+            <input type="range" min="1" max="16" step="1" value="16" id="bitCrush">
+        </div>
+
+        <div class="control">
+            <label>Pitch Drift</label>
+            <input type="range" min="0" max="50" step="1" value="3" id="pitchDrift">
+        </div>
+    </div>
+</div>
+
+<div class="window hidden" id="aboutWindow">
+    <div class="window-header">
+        <span>About</span>
+        <button onclick="closeWindow('aboutWindow')">✕</button>
+    </div>
+    <div class="window-content">
+        <p>
+            Quantum GUI Sound Forge is a professional single-file sound design environment
+            optimized for notification sounds, GUI clicks, warnings, sci-fi UI effects,
+            and realistic operating-system-style alerts.
+        </p>
+    </div>
+</div>
+
+<script>
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function $(id){ return document.getElementById(id); }
+
+const state = {
+    theme:'dark'
+};
+
+function updateStatus(text){
+    $('status').textContent = text;
+}
+
+function detectDevice(){
+    const ua = navigator.userAgent;
+    let type = "Desktop";
+
+    if(/tablet|ipad/i.test(ua)) type = "Tablet";
+    else if(/mobile|android|iphone/i.test(ua)) type = "Mobile";
+
+    $('deviceInfo').textContent = type + " • " + window.innerWidth + "x" + window.innerHeight;
+
+    if(type !== "Desktop"){
+        document.body.classList.add('mobile');
+    }
+}
+detectDevice();
+
+window.addEventListener('resize', detectDevice);
+
+function toggleTheme(){
+    document.body.classList.toggle('light');
+    state.theme = document.body.classList.contains('light') ? 'light' : 'dark';
+    saveSettings();
+}
+
+function toggleDropdown(){
+    $('menuDropdown').classList.toggle('open');
+}
+
+window.addEventListener('click',(e)=>{
+    if(!e.target.closest('.dropdown')){
+        $('menuDropdown').classList.remove('open');
+    }
+});
+
+function openWindow(id){
+    $(id).classList.remove('hidden');
+}
+
+function closeWindow(id){
+    $(id).classList.add('hidden');
+}
+
+function getSettings(){
+    return {
+        waveType:$('waveType').value,
+        freq:+$('freq').value,
+        duration:+$('duration').value,
+        volume:+$('volume').value,
+        attack:+$('attack').value,
+        decay:+$('decay').value,
+        sustain:+$('sustain').value,
+        release:+$('release').value,
+        cutoff:+$('cutoff').value,
+        resonance:+$('resonance').value,
+        filterType:$('filterType').value,
+        lfoFreq:+$('lfoFreq').value,
+        lfoDepth:+$('lfoDepth').value,
+        stereo:+$('stereo').value,
+        reverb:+$('reverb').value,
+        delay:+$('delay').value,
+        noiseLayer:+$('noiseLayer').value,
+        bitCrush:+$('bitCrush').value,
+        pitchDrift:+$('pitchDrift').value,
+        masterGain:+$('masterGain').value,
+        limiter:+$('limiter').value
+    };
+}
+
+function applySettings(data){
+    for(const key in data){
+        if($(key)) $(key).value = data[key];
+    }
+}
+
+function createNoiseBuffer(duration){
+    const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * duration, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    for(let i=0;i<data.length;i++){
+        data[i] = Math.random() * 2 - 1;
+    }
+
+    return buffer;
+}
+
+function playSound(){
+    const s = getSettings();
+    updateStatus("Generating...");
+
+    const now = audioCtx.currentTime;
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const filter = audioCtx.createBiquadFilter();
+    const panner = audioCtx.createStereoPanner();
+
+    const lfo = audioCtx.createOscillator();
+    const lfoGain = audioCtx.createGain();
+
+    osc.type = s.waveType;
+    osc.frequency.value = s.freq;
+
+    filter.type = s.filterType;
+    filter.frequency.value = s.cutoff;
+    filter.Q.value = s.resonance;
+
+    panner.pan.value = s.stereo * 2 - 1;
+
+    lfo.frequency.value = s.lfoFreq;
+    lfoGain.gain.value = s.lfoDepth;
+
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
+
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(s.volume, now + s.attack);
+    gain.gain.linearRampToValueAtTime(s.sustain * s.volume, now + s.attack + s.decay);
+    gain.gain.linearRampToValueAtTime(0.0001, now + s.duration + s.release);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(panner);
+    panner.connect(audioCtx.destination);
+
+    // Noise Layer
+    if(s.noiseLayer > 0){
+        const noise = audioCtx.createBufferSource();
+        const noiseGain = audioCtx.createGain();
+
+        noise.buffer = createNoiseBuffer(s.duration + s.release);
+        noiseGain.gain.value = s.noiseLayer;
+
+        noise.connect(noiseGain);
+        noiseGain.connect(filter);
+
+        noise.start();
+        noise.stop(now + s.duration + s.release);
+    }
+
+    // Delay
+    if(s.delay > 0){
+        const delayNode = audioCtx.createDelay();
+        const delayGain = audioCtx.createGain();
+
+        delayNode.delayTime.value = 0.15;
+        delayGain.gain.value = s.delay;
+
+        gain.connect(delayNode);
+        delayNode.connect(delayGain);
+        delayGain.connect(audioCtx.destination);
+    }
+
+    osc.start();
+    lfo.start();
+
+    osc.stop(now + s.duration + s.release);
+    lfo.stop(now + s.duration + s.release);
+
+    drawWave();
+    saveSettings();
+
+    setTimeout(()=>{
+        updateStatus("Ready");
+    },500);
+}
+
+function randomizeSound(){
+    $('freq').value = Math.floor(Math.random()*2500)+100;
+    $('duration').value = (Math.random()*1.5+0.1).toFixed(2);
+    $('volume').value = (Math.random()*0.8+0.1).toFixed(2);
+    $('cutoff').value = Math.floor(Math.random()*10000)+500;
+    $('resonance').value = (Math.random()*10+0.5).toFixed(1);
+    $('lfoFreq').value = (Math.random()*15).toFixed(1);
+    $('lfoDepth').value = Math.floor(Math.random()*500);
+    playSound();
+}
+
+function generatePreset(){
+    const preset = $('preset').value;
+
+    const presets = {
+        "Windows Alert":{
+            waveType:'triangle',
+            freq:880,
+            duration:0.35,
+            volume:0.45,
+            cutoff:4200,
+            resonance:2
+        },
+        "Mac Notification":{
+            waveType:'sine',
+            freq:1200,
+            duration:0.25,
+            volume:0.35,
+            cutoff:5000,
+            resonance:1
+        },
+        "Cyber Click":{
+            waveType:'square',
+            freq:700,
+            duration:0.08,
+            volume:0.6,
+            cutoff:8000,
+            resonance:4
+        },
+        "Success":{
+            waveType:'triangle',
+            freq:900,
+            duration:0.5,
+            volume:0.5,
+            cutoff:6000,
+            resonance:1
+        },
+        "Error":{
+            waveType:'sawtooth',
+            freq:250,
+            duration:0.8,
+            volume:0.6,
+            cutoff:1200,
+            resonance:8
+        },
+        "Futuristic Ping":{
+            waveType:'sine',
+            freq:1500,
+            duration:0.4,
+            volume:0.5,
+            cutoff:9000,
+            resonance:2
+        },
+        "Soft Tap":{
+            waveType:'triangle',
+            freq:400,
+            duration:0.06,
+            volume:0.3,
+            cutoff:3000,
+            resonance:1
+        },
+        "Warning Alarm":{
+            waveType:'square',
+            freq:500,
+            duration:1.2,
+            volume:0.7,
+            cutoff:1800,
+            resonance:12
+        },
+        "UI Hover":{
+            waveType:'sine',
+            freq:1000,
+            duration:0.05,
+            volume:0.2,
+            cutoff:6000,
+            resonance:1
+        }
+    };
+
+    applySettings(presets[preset]);
+    playSound();
+}
+
+function drawWave(){
+    const canvas = $('waveCanvas');
+    const ctx = canvas.getContext('2d');
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#4ea1ff';
+
+    ctx.beginPath();
+
+    for(let x=0;x<canvas.width;x++){
+        const y = canvas.height/2 + Math.sin(x*0.03) * 40 * Math.sin(x*0.002);
+        if(x===0) ctx.moveTo(x,y);
+        else ctx.lineTo(x,y);
+    }
+
+    ctx.stroke();
+
+    const t = $('timelineCanvas');
+    t.width = t.parentElement.clientWidth;
+    t.height = t.parentElement.clientHeight;
+
+    const tctx = t.getContext('2d');
+
+    tctx.clearRect(0,0,t.width,t.height);
+
+    for(let i=0;i<100;i++){
+        const h = Math.random()*t.height;
+        tctx.fillStyle = 'rgba(78,161,255,0.6)';
+        tctx.fillRect(i*14,t.height-h,6,h);
+    }
+}
+
+drawWave();
+
+function exportWav(){
+    const sampleRate = 44100;
+    const duration = +$('duration').value + +$('release').value;
+    const freq = +$('freq').value;
+    const volume = +$('volume').value;
+    const samples = sampleRate * duration;
+
+    const buffer = new ArrayBuffer(44 + samples * 2);
+    const view = new DataView(buffer);
+
+    function writeString(offset, string){
+        for(let i=0;i<string.length;i++){
+            view.setUint8(offset+i,string.charCodeAt(i));
+        }
+    }
+
+    writeString(0,'RIFF');
+    view.setUint32(4,36 + samples * 2,true);
+    writeString(8,'WAVE');
+    writeString(12,'fmt ');
+    view.setUint32(16,16,true);
+    view.setUint16(20,1,true);
+    view.setUint16(22,1,true);
+    view.setUint32(24,sampleRate,true);
+    view.setUint32(28,sampleRate*2,true);
+    view.setUint16(32,2,true);
+    view.setUint16(34,16,true);
+    writeString(36,'data');
+    view.setUint32(40,samples*2,true);
+
+    let offset = 44;
+
+    for(let i=0;i<samples;i++){
+        const sample = Math.sin((i/sampleRate)*Math.PI*2*freq) * volume;
+        view.setInt16(offset,sample*32767,true);
+        offset += 2;
+    }
+
+    const blob = new Blob([buffer],{type:'audio/wav'});
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'gui-sound.wav';
+    a.click();
+
+    updateStatus("Exported WAV");
+}
+
+function saveProject(){
+    localStorage.setItem('qgsf-project', JSON.stringify(getSettings()));
+    localStorage.setItem('qgsf-theme', state.theme);
+    updateStatus("Project Saved");
+}
+
+function loadProject(){
+    const data = localStorage.getItem('qgsf-project');
+    if(data){
+        applySettings(JSON.parse(data));
+        updateStatus("Project Loaded");
+    }
+}
+
+function clearProject(){
+    localStorage.removeItem('qgsf-project');
+    updateStatus("Project Reset");
+}
+
+function saveSettings(){
+    saveProject();
+}
+
+(function boot(){
+    const theme = localStorage.getItem('qgsf-theme');
+
+    if(theme === 'light'){
+        document.body.classList.add('light');
+        state.theme = 'light';
+    }
+
+    loadProject();
+})();
+
+document.querySelectorAll('.window').forEach(win=>{
+    const header = win.querySelector('.window-header');
+
+    let drag = false;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    header.addEventListener('mousedown',(e)=>{
+        drag = true;
+        offsetX = e.clientX - win.offsetLeft;
+        offsetY = e.clientY - win.offsetTop;
+    });
+
+    document.addEventListener('mousemove',(e)=>{
+        if(drag){
+            win.style.left = (e.clientX - offsetX) + 'px';
+            win.style.top = (e.clientY - offsetY) + 'px';
+        }
+    });
+
+    document.addEventListener('mouseup',()=>{
+        drag = false;
+    });
+});
+</script>
+</body>
+</html>
