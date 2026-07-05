@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tabu</title>
+<style>
+:root{--bg:#111;--fg:#fff;--card:#222;--acc:#5aa3ff}
+body{margin:0;font-family:system-ui;background:var(--bg);color:var(--fg)}
+.light{--bg:#f3f3f3;--fg:#111;--card:#fff}
+header{display:flex;justify-content:space-between;padding:12px}
+a{color:var(--acc)} .pill{border:none;border-radius:999px;padding:12px 20px;background:var(--acc);color:#fff;cursor:pointer}
+#gear{display:none} .card{max-width:520px;margin:20px auto;background:var(--card);padding:20px;border-radius:20px;text-align:center}
+.hidden{display:none}
+</style></head>
+<body>
+<header><a href="https://mister-x2009.github.io">← Homepage</a><div><button id="mode" class="pill">🌙/☀️</button><button id="gear" class="pill">⚙</button></div></header>
+<div class="card">
+<div id="setup">Timer <input id="secs" type="number" value="60" min="10"><button class="pill" id="start">Start</button></div>
+<div id="game" class="hidden"><h3 id="group"></h3><h1 id="word"></h1><ul id="tabu"></ul><h2 id="time"></h2><button class="pill" id="next">Nächste</button></div>
+</div>
+<dialog id="dev"><h2>Entwickler</h2><select id="groups"></select><div id="list"></div><button id="add">+ Wort</button><button onclick="dev.close()">Schließen</button></dialog>
+<script>
+const defaults=[
+{group:"Tiere",word:"Hund",tabu:["Katze","Bellen","Leine","Haustier"]},
+{group:"Essen",word:"Pizza",tabu:["Käse","Tomate","Ofen","Italien"]},
+{group:"Technik",word:"Computer",tabu:["Monitor","Maus","Tastatur","Internet"]},
+{group:"Sport",word:"Fußball",tabu:["Tor","Ball","Spieler","Schiedsrichter"]}
+];
+let dict=JSON.parse(localStorage.getItem("tabuDict")||"null")||defaults;
+let deck=[],t,intv,taps=[];
+function save(){localStorage.setItem("tabuDict",JSON.stringify(dict))}
+function shuffle(){deck=[...dict];for(let i=deck.length-1;i>0;i--){let j=Math.random()*(i+1)|0;[deck[i],deck[j]]=[deck[j],deck[i]]}}
+function beep(f,d){let a=new (AudioContext||webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=f;o.start();g.gain.setValueAtTime(.08,a.currentTime);o.stop(a.currentTime+d/1000)}
+function show(){if(!deck.length)shuffle();let c=deck.pop();group.textContent=c.group;word.textContent=c.word;tabu.innerHTML=c.tabu.map(x=>"<li>"+x+"</li>").join("")}
+start.onclick=()=>{setup.classList.add("hidden");game.classList.remove("hidden");t=+secs.value;time.textContent=t;show();clearInterval(intv);intv=setInterval(()=>{t--;time.textContent=t;if(t<=5&&t>0)beep(900,80);if(t<=0){beep(300,600);clearInterval(intv);}},1000)}
+next.onclick=show;
+mode.onclick=()=>{document.body.classList.toggle("light");let n=Date.now();taps=taps.filter(x=>n-x<1000);taps.push(n);if(taps.length>=4){gear.style.display="inline-block";taps=[]}}
+gear.onclick=()=>{groups.innerHTML=[...new Set(dict.map(d=>d.group))].map(g=>`<option>${g}</option>`).join("");render();dev.showModal()}
+groups.onchange=render;
+function render(){let g=groups.value||groups.options[0]?.value;list.innerHTML=dict.filter(d=>d.group==g).map((d,i)=>`<details><summary>${d.word}</summary>${d.tabu.join(", ")}</details>`).join("")}
+add.onclick=()=>{let g=prompt("Gruppe?");if(!g)return;let w=prompt("Oberwort?");if(!w)return;let t=[1,2,3,4].map(i=>prompt("Tabuwort "+i));dict.push({group:g,word:w,tabu:t});save();render()}
+shuffle();
+</script>
+</body></html>
