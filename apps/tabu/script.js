@@ -1,0 +1,1 @@
+const defaults=[{group:'Tiere',word:'Hund',tabu:['Katze','Bellen','Leine','Haustier']}];let dict=JSON.parse(localStorage.getItem('tabuDict')||'null')||defaults;
