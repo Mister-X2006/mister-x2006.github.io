@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VR Kosmos-Explorer & Hyperraum-Sprung</title>
+    <!-- Tailwind CSS für stilvolle Overlays -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js für 3D-Grafik -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body class="bg-black text-white overflow-hidden select-none font-sans">
+
+    <!-- Start-Bildschirm (Wichtig für Web Audio Freigabe & VR Initialisierung) -->
+    <div id="intro-screen" class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-radial from-slate-900 to-black p-6 text-center">
+        <div class="max-w-md bg-zinc-900/80 p-8 rounded-2xl border border-cyan-500/30 shadow-2xl backdrop-blur-md">
+            <h1 class="text-3xl font-extrabold tracking-wider text-cyan-400 mb-2 uppercase">KOSMOS EXPLORER</h1>
+            <p class="text-xs text-zinc-400 uppercase tracking-widest mb-6">VR Prozeduraler Raumschiff-Simulator</p>
+            
+            <div class="space-y-4 mb-8 text-left text-sm text-zinc-300">
+                <div class="flex items-start gap-2">
+                    <span class="text-cyan-400 font-bold">🚀 System:</span>
+                    <span>Prozedural generierte Planeten und Sterne bei jedem Sprung.</span>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="text-cyan-400 font-bold">🕹️ Steuerung (Desktop):</span>
+                    <span>Maus bewegen zum Steuern. <b>W / S</b> für Schub. <b>Leertaste</b> für Hyperraumsprung.</span>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="text-cyan-400 font-bold">🥽 Steuerung (VR):</span>
+                    <span>Trigger halten & Controller bewegen, um Steuerknüppel / Schubhebel direkt im Cockpit zu greifen. Alternativ Thumbstick/Touchpad nutzen.</span>
+                </div>
+            </div>
+
+            <button id="start-btn" class="w-full bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-4 px-6 rounded-lg transition duration-300 transform hover:scale-105 shadow-lg shadow-cyan-500/50">
+                SYSTEME STARTEN
+            </button>
+        </div>
+    </div>
+
+    <!-- 2D HUD für Desktop/Mobile Spieler (wird in VR ausgeblendet) -->
+    <div id="desktop-hud" class="hidden absolute top-4 left-4 z-40 pointer-events-none font-mono">
+        <div class="bg-zinc-950/80 p-4 rounded-lg border border-cyan-500/20 text-xs space-y-1 backdrop-blur">
+            <div class="text-cyan-400 font-bold text-sm mb-1">SCHIFFS-TELEMETRIE</div>
+            <div>STATUS: <span id="hud-status" class="text-green-400">BEREIT</span></div>
+            <div>SCHUB: <span id="hud-thrust" class="text-cyan-300">0%</span></div>
+            <div>GESCHWINDIGKEIT: <span id="hud-speed" class="text-cyan-300">0 km/s</span></div>
+            <div>WARP-ANTRIEB: <span id="hud-warp" class="text-yellow-400">100% GELADEN</span></div>
+            <div class="mt-2 text-[10px] text-zinc-500">PRESSE [LEERTASTE] FÜR SPRUNG</div>
+        </div>
+    </div>
+
+    <!-- VR Button Container -->
+    <div id="vr-btn-container" class="absolute bottom-6 left-1/2 -translate-x-1/2 z-40"></div>
+
+    <!-- Web Audio & Haupt-Simulation -->
+    <script>
+        // --- 1. AUDIO SYNTHESIZER ENGINE (Web Audio API) ---
+        class SpaceAudio {
+            constructor() {
+                this.ctx = null;
+                this.engineOsc = null;
+                this.engineGain = null;
+                this.warpOsc = null;
+                this.warpGain = null;
+                this.initialized = false;
+            }
+
+            init() {
+                if (this.initialized) return;
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioContext();
+                
+                // Triebwerks-Hum
+                this.engineOsc = this.ctx.createOscillator();
+                this.engineGain = this.ctx.createGain();
+                this.engineOsc.type = 'sawtooth';
+                this.engineOsc.frequency.setValueAtTime(45, this.ctx.currentTime); // Tiefer Bass
+                
+                // Tiefpassfilter für angenehmeren Sound
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(120, this.ctx.currentTime);
+
+                this.engineOsc.connect(filter);
+                filter.connect(this.engineGain);
+                this.engineGain.connect(this.ctx.destination);
+                
+                this.engineGain.gain.setValueAtTime(0.01, this.ctx.currentTime);
+                this.engineOsc.start();
+
+                this.initialized = true;
+            }
+
+            setThrust(value) {
+                if (!this.initialized) return;
+                // Tonhöhe und Lautstärke an den Schub anpassen
+                const freq = 45 + (value * 60);
+                const gain = 0.02 + (value * 0.12);
+                this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.2);
+                this.engineGain.gain.setTargetAtTime(gain, this.ctx.currentTime, 0.2);
+            }
+
+            playWarpCharge() {
+                if (!this.initialized) return;
+                this.warpOsc = this.ctx.createOscillator();
+                this.warpGain = this.ctx.createGain();
+                this.warpOsc.type = 'sine';
+                
+                this.warpOsc.frequency.setValueAtTime(100, this.ctx.currentTime);
+                // Pitch sweep nach oben
+                this.warpOsc.frequency.exponentialRampToValueAtTime(1800, this.ctx.currentTime + 3.0);
+                
+                this.warpGain.gain.setValueAtTime(0.01, this.ctx.currentTime);
+                this.warpGain.gain.linearRampToValueAtTime(0.4, this.ctx.currentTime + 2.8);
+                this.warpGain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 3.0);
+
+                this.warpOsc.connect(this.warpGain);
+                this.warpGain.connect(this.ctx.destination);
+                this.warpOsc.start();
+                this.warpOsc.stop(this.ctx.currentTime + 3.1);
+            }
+
+            playWarpFlash() {
+                if (!this.initialized) return;
+                // Rauschen für die Explosion/den Knall beim Warp-Austritt
+                const bufferSize = this.ctx.sampleRate * 1.5;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const noiseFilter = this.ctx.createBiquadFilter();
+                noiseFilter.type = 'lowpass';
+                noiseFilter.frequency.setValueAtTime(800, this.ctx.currentTime);
+                noiseFilter.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + 1.2);
+
+                const noiseGain = this.ctx.createGain();
+                noiseGain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+                noiseGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 1.4);
+
+                noise.connect(noiseFilter);
+                noiseFilter.connect(noiseGain);
+                noiseGain.connect(this.ctx.destination);
+                noise.start();
+            }
+        }
+
+        const sfx = new SpaceAudio();
+
+        // --- 2. GAME STATE CONFIGURATION ---
+        const state = {
+            speed: 0,
+            targetSpeed: 0,
+            rotation: { pitch: 0, yaw: 0, roll: 0 },
+            warpProgress: 0, // 0 = normal, 0.1-1.0 = charging, 1.0-2.0 = warping, 2.0+ = cooling
+            warpState: 'READY', // READY, CHARGING, WARPING, COOLING
+            activeSystemPlanets: [],
+            starField: null,
+            joystickGrabbed: false,
+            throttleGrabbed: false
+        };
+
+        // --- 3. THREE.JS & VR INITIALIZATION ---
+        let scene, camera, renderer, shipGroup;
+        let starGeometry, starMaterial, stars;
+        let cockpitGroup, virtualJoystick, virtualThrottle;
+        let uiCanvas, uiTexture, uiMesh;
+        let controllers = [];
+
+        function init3D() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x000005, 0.0008);
+
+            // Kamera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 15000);
+            
+            // Container für das Raumschiff (inklusive Kamera und Cockpit)
+            shipGroup = new THREE.Group();
+            shipGroup.add(camera);
+            scene.add(shipGroup);
+
+            // Renderer mit XR-Unterstützung
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.xr.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // Beleuchtung im All
+            const ambientLight = new THREE.AmbientLight(0x111122);
+            scene.add(ambientLight);
+
+            // Dynamische Sonne und Lichtquellen werden prozedural generiert
+            generateSolarSystem();
+
+            // Cockpit bauen
+            buildCockpit();
+
+            // Sternenfeld bauen
+            buildStarfield();
+
+            // VR-Controller einrichten
+            setupVRControllers();
+
+            // Keyboard/Maus Steuerung registrieren
+            setupInputListeners();
+
+            // VR Button erstellen
+            setupVRButton();
+
+            // Event-Listener für Größenänderung
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // --- 4. PROCEDURAL GENERATION (STAR SYSTEM) ---
+        function generateSolarSystem() {
+            // Alte Himmelskörper löschen
+            state.activeSystemPlanets.forEach(p => scene.remove(p));
+            state.activeSystemPlanets = [];
+            
+            // Vorherige Sonne löschen falls vorhanden
+            const oldSun = scene.getObjectByName("Sun");
+            if (oldSun) scene.remove(oldSun);
+            const oldLight = scene.getObjectByName("SunLight");
+            if (oldLight) scene.remove(oldLight);
+
+            // 1. Die Sonne generieren
+            const sunRadius = 250 + Math.random() * 200;
+            const sunGeo = new THREE.SphereGeometry(sunRadius, 32, 32);
+            
+            // Zufällige Sonnenfarbe (Gelb, Orange, Blau, Rot)
+            const sunColors = [0xffaa33, 0xff5500, 0x33aaff, 0xff2200];
+            const sunColor = sunColors[Math.floor(Math.random() * sunColors.length)];
+            
+            const sunMat = new THREE.MeshBasicMaterial({
+                color: sunColor,
+                toneMapped: false
+            });
+            const sun = new THREE.Mesh(sunGeo, sunMat);
+            sun.name = "Sun";
+            // Setze Sonne ein Stück vor das Schiff beim Start
+            sun.position.set(0, 0, -2500);
+            scene.add(sun);
+
+            // Sonnenlicht
+            const sunLight = new THREE.PointLight(sunColor, 2, 8000, 0.5);
+            sunLight.position.copy(sun.position);
+            sunLight.name = "SunLight";
+            scene.add(sunLight);
+
+            // 2. Prozedurale Planeten generieren (3 bis 6 Stück)
+            const planetCount = 3 + Math.floor(Math.random() * 4);
+            const planetTypes = ['ice', 'desert', 'gas', 'lava', 'forest'];
+
+            for (let i = 0; i < planetCount; i++) {
+                const type = planetTypes[Math.floor(Math.random() * planetTypes.length)];
+                const radius = 50 + Math.random() * 120;
+                const geo = new THREE.SphereGeometry(radius, 32, 32);
+                
+                // Generiere prozedurale Textur über Canvas
+                const planetTexture = createProceduralPlanetTexture(type);
+                
+                const mat = new THREE.MeshStandardMaterial({
+                    map: planetTexture,
+                    roughness: 0.8,
+                    metalness: 0.1
+                });
+
+                // Atmosphäre/Glühen-Effekt hinzufügen
+                if (type === 'gas' || type === 'ice') {
+                    mat.roughness = 0.3;
+                    mat.metalness = 0.3;
+                }
+
+                const planet = new THREE.Mesh(geo, mat);
+                
+                // Positionen im Orbit um die Sonne verteilen
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 1500 + (i * 1200) + Math.random() * 400;
+                
+                planet.position.set(
+                    sun.position.x + Math.sin(angle) * distance,
+                    (Math.random() - 0.5) * 400,
+                    sun.position.z + Math.cos(angle) * distance
+                );
+
+                // Bewegungsparameter speichern
+                planet.userData = {
+                    orbitSpeed: 0.0005 + (Math.random() * 0.001),
+                    rotationSpeed: 0.002 + (Math.random() * 0.005),
+                    distance: distance,
+                    angle: angle,
+                    sunPos: sun.position
+                };
+
+                scene.add(planet);
+                state.activeSystemPlanets.push(planet);
+
+                // Optional: Ringe für Gasriesen
+                if (type === 'gas' && Math.random() > 0.4) {
+                    const ringGeo = new THREE.RingGeometry(radius * 1.4, radius * 2.3, 64);
+                    // Ringe flach legen
+                    ringGeo.rotateX(Math.PI / 2);
+                    const ringMat = new THREE.MeshStandardMaterial({ 
+                        color: sunColor, 
+                        side: THREE.DoubleSide, 
+                        transparent: true, 
+                        opacity: 0.5 
+                    });
+                    const ring = new THREE.Mesh(ringGeo, ringMat);
+                    planet.add(ring);
+                }
+            }
+        }
+
+        // Erzeugt ein Canvas mit prozeduralem Muster für Planeten
+        function createProceduralPlanetTexture(type) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            // Hintergrundfarbe basierend auf Typ
+            let baseColor, accentColor, detailColor;
+            if (type === 'ice') {
+                baseColor = '#8bc34a'; // Eis-Blau / Türkis Nuancen
+                ctx.fillStyle = '#b3e5fc';
+                accentColor = '#e1f5fe';
+                detailColor = '#0288d1';
+            } else if (type === 'desert') {
+                ctx.fillStyle = '#ffcc80';
+                accentColor = '#b7ab85';
+                detailColor = '#8d6e63';
+            } else if (type === 'lava') {
+                ctx.fillStyle = '#212121';
+                accentColor = '#ff3d00';
+                detailColor = '#ffea00';
+            } else if (type === 'forest') {
+                ctx.fillStyle = '#1b5e20';
+                accentColor = '#2e7d32';
+                detailColor = '#0d47a1'; // Ozeane
+            } else { // gas
+                ctx.fillStyle = '#ab47bc';
+                accentColor = '#7e57c2';
+                detailColor = '#e1bee7';
+            }
+
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Streifen / Rauschen hinzufügen
+            for (let y = 0; y < canvas.height; y += 4) {
+                if (Math.random() > 0.3) {
+                    ctx.fillStyle = Math.random() > 0.5 ? accentColor : detailColor;
+                    ctx.globalAlpha = Math.random() * 0.4;
+                    ctx.fillRect(0, y, canvas.width, Math.random() * 12);
+                }
+            }
+
+            // Flecken hinzufügen
+            ctx.globalAlpha = 0.2;
+            for (let i = 0; i < 40; i++) {
+                ctx.fillStyle = detailColor;
+                ctx.beginPath();
+                ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 60, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+
+        // --- 5. COCKPIT DESIGN & FLIGHT CONTROLS UI ---
+        function buildCockpit() {
+            cockpitGroup = new THREE.Group();
+            // Positioniert das Cockpit leicht vor der Kamera
+            cockpitGroup.position.set(0, -0.6, -1);
+            shipGroup.add(cockpitGroup);
+
+            // Cockpit-Rahmen (Struktur)
+            const frameMat = new THREE.MeshStandardMaterial({ color: 0x1a1a24, roughness: 0.5, metalness: 0.8 });
+            
+            // Bodenkonsole
+            const consoleGeo = new THREE.BoxGeometry(1.2, 0.2, 0.8);
+            const consoleMesh = new THREE.Mesh(consoleGeo, frameMat);
+            consoleMesh.position.set(0, 0, 0);
+            cockpitGroup.add(consoleMesh);
+
+            // Steuerknüppel (Joystick)
+            const stickBaseGeo = new THREE.SphereGeometry(0.06, 16, 16);
+            const stickBaseMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0f, metalness: 0.9 });
+            const stickBase = new THREE.Mesh(stickBaseGeo, stickBaseMat);
+            stickBase.position.set(0.2, 0.1, 0.1);
+            cockpitGroup.add(stickBase);
+
+            const stickRodGeo = new THREE.CylinderGeometry(0.01, 0.01, 0.25, 8);
+            stickRodGeo.translate(0, 0.125, 0); // Drehpunkt nach unten verlegen
+            const stickRodMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.9 });
+            virtualJoystick = new THREE.Mesh(stickRodGeo, stickRodMat);
+            virtualJoystick.position.copy(stickBase.position);
+            cockpitGroup.add(virtualJoystick);
+
+            // Knauf des Steuerknüppels
+            const knobGeo = new THREE.BoxGeometry(0.04, 0.05, 0.04);
+            const knobMat = new THREE.MeshStandardMaterial({ color: 0xdd2222 });
+            const knob = new THREE.Mesh(knobGeo, knobMat);
+            knob.position.set(0, 0.25, 0);
+            virtualJoystick.add(knob);
+
+            // Schubhebel (Throttle)
+            const throttleTrackGeo = new THREE.BoxGeometry(0.08, 0.02, 0.3);
+            const throttleTrack = new THREE.Mesh(throttleTrackGeo, stickBaseMat);
+            throttleTrack.position.set(-0.2, 0.1, 0.1);
+            cockpitGroup.add(throttleTrack);
+
+            const throttleLeverGeo = new THREE.BoxGeometry(0.03, 0.12, 0.03);
+            throttleLeverGeo.translate(0, 0.06, 0);
+            const throttleLeverMat = new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.8 });
+            virtualThrottle = new THREE.Mesh(throttleLeverGeo, throttleLeverMat);
+            virtualThrottle.position.set(-0.2, 0.1, 0.1); // Z-Achse steuert Beschleunigung
+            cockpitGroup.add(virtualThrottle);
+
+            const throttleHandleGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.08, 8);
+            throttleHandleGeo.rotateZ(Math.PI / 2);
+            const throttleHandle = new THREE.Mesh(throttleHandleGeo, knobMat);
+            throttleHandle.position.set(0, 0.12, 0);
+            virtualThrottle.add(throttleHandle);
+
+            // Holographisches Display (Interaktives UI auf Textur)
+            uiCanvas = document.createElement('canvas');
+            uiCanvas.width = 512;
+            uiCanvas.height = 256;
+            uiTexture = new THREE.CanvasTexture(uiCanvas);
+
+            const displayGeo = new THREE.PlaneGeometry(0.6, 0.3);
+            const displayMat = new THREE.MeshBasicMaterial({
+                map: uiTexture,
+                transparent: true,
+                opacity: 0.95,
+                side: THREE.DoubleSide
+            });
+            uiMesh = new THREE.Mesh(displayGeo, displayMat);
+            uiMesh.position.set(0, 0.35, -0.15);
+            uiMesh.rotation.x = -0.3; // Neigung zum Piloten
+            cockpitGroup.add(uiMesh);
+
+            updateHUDCanvas();
+        }
+
+        // Zeichnet die futuristische Anzeige auf das Cockpit-Display
+        function updateHUDCanvas() {
+            const ctx = uiCanvas.getContext('2d');
+            ctx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
+
+            // Hintergrund-Panel
+            ctx.fillStyle = 'rgba(5, 15, 25, 0.85)';
+            ctx.fillRect(0, 0, uiCanvas.width, uiCanvas.height);
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(5, 5, uiCanvas.width - 10, uiCanvas.height - 10);
+
+            // Grid Muster im Hintergrund
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.08)';
+            ctx.lineWidth = 1;
+            for (let i = 20; i < uiCanvas.width; i += 20) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, uiCanvas.height); ctx.stroke();
+            }
+            for (let i = 20; i < uiCanvas.height; i += 20) {
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(uiCanvas.width, i); ctx.stroke();
+            }
+
+            // Speedometer Arc
+            const speedPct = state.speed / 150; // max speed visual
+            ctx.beginPath();
+            ctx.arc(120, 130, 70, Math.PI * 0.8, Math.PI * 2.2);
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.2)';
+            ctx.lineWidth = 8;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(120, 130, 70, Math.PI * 0.8, Math.PI * (0.8 + speedPct * 1.4));
+            ctx.strokeStyle = '#00f0ff';
+            ctx.lineWidth = 10;
+            ctx.stroke();
+
+            // Text Informationen
+            ctx.fillStyle = '#00ffff';
+            ctx.font = 'bold 16px monospace';
+            ctx.fillText('NAV-LOGIK v4.0', 260, 45);
+
+            ctx.font = 'bold 36px monospace';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(`${Math.round(state.speed * 10)} km/h`, 65, 140);
+            
+            ctx.font = '14px monospace';
+            ctx.fillStyle = '#8bc34a';
+            ctx.fillText(`THRUST: ${Math.round(state.targetSpeed * 100)}%`, 260, 85);
+
+            // Warp-Status Anzeige
+            let warpText = 'STATUS: SPECTRUM-NORMAL';
+            let warpCol = '#00ffff';
+            if (state.warpState === 'CHARGING') {
+                warpText = 'WARP: LADE AUF... (' + Math.round((state.warpProgress / 1) * 100) + '%)';
+                warpCol = '#ffaa00';
+            } else if (state.warpState === 'WARPING') {
+                warpText = 'WARPING! REALITÄTS-ZERRUNG';
+                warpCol = '#ff0055';
+            } else if (state.warpState === 'COOLING') {
+                warpText = 'WARP-ABKÜHLUNG: BEREIT';
+                warpCol = '#9e9e9e';
+            } else {
+                warpText = 'JUMP DRIVE: BEREIT [X]';
+                warpCol = '#00ff66';
+            }
+            
+            ctx.fillStyle = warpCol;
+            ctx.font = 'bold 16px monospace';
+            ctx.fillText(warpText, 260, 130);
+
+            // Einfacher Reaktor-Balken
+            ctx.fillStyle = 'rgba(0, 255, 100, 0.2)';
+            ctx.fillRect(260, 160, 200, 20);
+            ctx.fillStyle = warpCol;
+            let barWidth = 200;
+            if (state.warpState === 'CHARGING') barWidth = (state.warpProgress / 1) * 200;
+            if (state.warpState === 'COOLING') barWidth = ((2 - state.warpProgress) / 1) * 200;
+            ctx.fillRect(260, 160, barWidth, 20);
+
+            // Künstlicher Horizont (Mitte)
+            ctx.strokeStyle = '#00ff66';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(120, 130, 10, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(80, 130); ctx.lineTo(105, 130);
+            ctx.moveTo(135, 130); ctx.lineTo(160, 130);
+            ctx.stroke();
+
+            uiTexture.needsUpdate = true;
+        }
+
+        // --- 6. STARFIELD GENERATION & SHADER-LIKE PARTICLES ---
+        function buildStarfield() {
+            const starCount = 3500;
+            starGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(starCount * 3);
+            const sizes = new Float32Array(starCount);
+
+            for (let i = 0; i < starCount * 3; i += 3) {
+                // Verteile Sterne zufällig in einer riesigen Sphäre um das Schiff herum
+                const u = Math.random();
+                const v = Math.random();
+                const theta = u * 2.0 * Math.PI;
+                const phi = Math.acos(2.0 * v - 1.0);
+                const r = 2000 + Math.random() * 8000; // Distanzbereich
+
+                positions[i] = r * Math.sin(phi) * Math.cos(theta);
+                positions[i + 1] = r * Math.sin(phi) * Math.sin(theta);
+                positions[i + 2] = r * Math.cos(phi);
+
+                sizes[i / 3] = 1.0 + Math.random() * 3.0;
+            }
+
+            starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            // Texturlose glühende Punkte erstellen
+            starMaterial = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 2.0,
+                transparent: true,
+                opacity: 0.8,
+                sizeAttenuation: true
+            });
+
+            stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+        }
+
+        // --- 7. INPUT HANDLING (DESKTOP, MOBILE & VR CONTROLLERS) ---
+        let mouseX = 0, mouseY = 0;
+        const keys = { w: false, s: false, space: false };
+
+        function setupInputListeners() {
+            // Maussteuerung (Kopf drehen/Steuern auf Desktop)
+            window.addEventListener('mousemove', (e) => {
+                if (renderer.xr.isPresenting) return; // In VR ignorieren
+                mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+                mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
+            });
+
+            // Tastatursteuerung
+            window.addEventListener('keydown', (e) => {
+                if (e.key.toLowerCase() === 'w') keys.w = true;
+                if (e.key.toLowerCase() === 's') keys.s = true;
+                if (e.key === ' ') {
+                    e.preventDefault();
+                    triggerWarp();
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                if (e.key.toLowerCase() === 'w') keys.w = false;
+                if (e.key.toLowerCase() === 's') keys.s = false;
+            });
+        }
+
+        function setupVRControllers() {
+            // Controller 1 & 2 Setup
+            for (let i = 0; i < 2; i++) {
+                const controller = renderer.xr.getController(i);
+                
+                controller.addEventListener('selectstart', () => {
+                    // Überprüfen, ob Controller nah am Joystick oder Throttle ist
+                    const controllerPos = new THREE.Vector3();
+                    controllerPos.setFromMatrixPosition(controller.matrixWorld);
+
+                    // Konvertiere Joystick-Position in globale Weltkoordinaten
+                    const stickGlobalPos = new THREE.Vector3();
+                    virtualJoystick.getWorldPosition(stickGlobalPos);
+
+                    const throttleGlobalPos = new THREE.Vector3();
+                    virtualThrottle.getWorldPosition(throttleGlobalPos);
+
+                    const distToStick = controllerPos.distanceTo(stickGlobalPos);
+                    const distToThrottle = controllerPos.distanceTo(throttleGlobalPos);
+
+                    if (distToStick < 0.25) {
+                        state.joystickGrabbed = controller;
+                    } else if (distToThrottle < 0.25) {
+                        state.throttleGrabbed = controller;
+                    } else {
+                        // Wenn außerhalb, einfach Trigger gedrückt halten, um Hyperraum zu zünden
+                        triggerWarp();
+                    }
+                });
+
+                controller.addEventListener('selectend', () => {
+                    if (state.joystickGrabbed === controller) state.joystickGrabbed = null;
+                    if (state.throttleGrabbed === controller) state.throttleGrabbed = null;
+                });
+
+                scene.add(controller);
+                controllers.push(controller);
+
+                // Controller visuelles Modell (Einfacher leuchtender Punkt/Strahl)
+                const controllerGrip = renderer.xr.getControllerGrip(i);
+                const ringGeo = new THREE.RingGeometry(0.01, 0.02, 16);
+                const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide });
+                const pointer = new THREE.Mesh(ringGeo, ringMat);
+                pointer.rotation.x = Math.PI / 2;
+                controllerGrip.add(pointer);
+                scene.add(controllerGrip);
+            }
+        }
+
+        // --- 8. HYPERRAUM SPRUNG LOGIK (JUMP DRIVE) ---
+        function triggerWarp() {
+            if (state.warpState !== 'READY') return;
+
+            state.warpState = 'CHARGING';
+            state.warpProgress = 0;
+            sfx.playWarpCharge();
+
+            // Cockpit fängt leicht an zu rütteln
+            shakeCockpit();
+        }
+
+        function shakeCockpit() {
+            if (state.warpState === 'CHARGING') {
+                cockpitGroup.position.x = (Math.random() - 0.5) * 0.015;
+                cockpitGroup.position.y = -0.6 + (Math.random() - 0.5) * 0.015;
+                setTimeout(shakeCockpit, 30);
+            } else {
+                cockpitGroup.position.set(0, -0.6, -1);
+            }
+        }
+
+        function executeWarpJump() {
+            state.warpState = 'WARPING';
+            sfx.playWarpFlash();
+
+            // Space Tunnel-Visualisierung starten
+            // Sterne strecken
+            starMaterial.size = 25.0; // Vergrößern für Streckungs-Effekt
+
+            // Nach kurzer Zeit im Warp: Neues System laden
+            setTimeout(() => {
+                generateSolarSystem();
+                
+                // Warp verlangsamt und kühlt ab
+                state.warpState = 'COOLING';
+                starMaterial.size = 2.0;
+                
+                setTimeout(() => {
+                    state.warpState = 'READY';
+                }, 1500); // Cooldown-Dauer
+            }, 2000); // Warp-Flugdauer im Tunnel
+        }
+
+        // --- 9. WEBXR INITIALIZATION BUTTON ---
+        function setupVRButton() {
+            const container = document.getElementById('vr-btn-container');
+            
+            if ('xr' in navigator) {
+                navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
+                    if (supported) {
+                        const btn = document.createElement('button');
+                        btn.className = "bg-red-600 hover:bg-red-500 text-white font-mono font-bold py-3 px-6 rounded-full border border-red-400 shadow-xl shadow-red-600/30 transition-all duration-300 transform hover:scale-105 uppercase tracking-widest text-sm";
+                        btn.innerHTML = "🥽 VR Modus Starten";
+                        
+                        btn.onclick = () => {
+                            navigator.xr.requestSession('immersive-vr', {
+                                optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking']
+                            }).then((session) => {
+                                renderer.xr.setSession(session);
+                                sfx.init();
+                                document.getElementById('desktop-hud').classList.add('hidden');
+                            });
+                        };
+                        container.appendChild(btn);
+                    } else {
+                        showNoVRFallback();
+                    }
+                });
+            } else {
+                showNoVRFallback();
+            }
+        }
+
+        function showNoVRFallback() {
+            const container = document.getElementById('vr-btn-container');
+            const info = document.createElement('div');
+            info.className = "bg-zinc-900/90 text-zinc-400 border border-zinc-700 p-2 px-4 rounded-full text-xs font-mono text-center";
+            info.innerHTML = "VR Headset nicht erkannt — Desktop-Modus aktiv 🖥️";
+            container.appendChild(info);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- 10. GAME LOOP & FLY ENGINE ---
+        function animate(timestamp) {
+            // Planeten Orbits berechnen
+            state.activeSystemPlanets.forEach(planet => {
+                const data = planet.userData;
+                data.angle += data.orbitSpeed;
+                
+                planet.position.x = data.sunPos.x + Math.sin(data.angle) * data.distance;
+                planet.position.z = data.sunPos.z + Math.cos(data.angle) * data.distance;
+                planet.rotation.y += data.rotationSpeed;
+            });
+
+            // 1. BEWEGUNG & FLUGSTEUERUNG (Physik & Input-Verarbeitung)
+            let currentPitch = 0;
+            let currentYaw = 0;
+
+            // Kontroll-Input ermitteln (Maus oder VR Controller)
+            if (state.joystickGrabbed) {
+                // VR Greif-Steuerung
+                const ctrlPos = new THREE.Vector3();
+                state.joystickGrabbed.getWorldPosition(ctrlPos);
+                
+                const joystickBasePos = new THREE.Vector3();
+                virtualJoystick.position.copy(cockpitGroup.position).add(new THREE.Vector2(0.2, 0.1)); // relativ
+
+                const deltaX = ctrlPos.x - (shipGroup.position.x + 0.2); // Grobe Differenz zur Schiffsposition
+                const deltaY = ctrlPos.y - (shipGroup.position.y - 0.5);
+
+                currentYaw = THREE.MathUtils.clamp(-deltaX * 5, -1, 1);
+                currentPitch = THREE.MathUtils.clamp(deltaY * 5, -1, 1);
+
+                // Cockpit Hebel optisch neigen
+                virtualJoystick.rotation.z = -currentYaw * 0.4;
+                virtualJoystick.rotation.x = currentPitch * 0.4;
+            } else {
+                // Desktop Maussteuerung
+                currentYaw = -mouseX;
+                currentPitch = mouseY;
+                
+                // Joystick im Cockpit passend neigen
+                virtualJoystick.rotation.z = THREE.MathUtils.lerp(virtualJoystick.rotation.z, -currentYaw * 0.4, 0.1);
+                virtualJoystick.rotation.x = THREE.MathUtils.lerp(virtualJoystick.rotation.x, currentPitch * 0.4, 0.1);
+            }
+
+            // Schubhebel verarbeiten
+            if (state.throttleGrabbed) {
+                const ctrlPos = new THREE.Vector3();
+                state.throttleGrabbed.getWorldPosition(ctrlPos);
+                // Position mappen
+                const zRel = (ctrlPos.z - shipGroup.position.z);
+                const val = THREE.MathUtils.clamp((-zRel * 10), 0, 1.5);
+                state.targetSpeed = val;
+
+                virtualThrottle.position.z = 0.1 - (val * 0.1); // Optisch verschieben
+            } else {
+                // Tastatur Schubsteuerung
+                if (keys.w) state.targetSpeed = Math.min(1.5, state.targetSpeed + 0.01);
+                if (keys.s) state.targetSpeed = Math.max(0, state.targetSpeed - 0.01);
+
+                virtualThrottle.position.z = THREE.MathUtils.lerp(virtualThrottle.position.z, 0.1 - (state.targetSpeed * 0.1), 0.1);
+            }
+
+            // Beschleunigung dämpfen (Trägheit)
+            state.speed = THREE.MathUtils.lerp(state.speed, state.targetSpeed * 80, 0.05);
+            sfx.setThrust(state.speed / 120);
+
+            // Drehung des Schiffs berechnen (Pitch, Yaw, Roll für echte Space-Physik)
+            state.rotation.yaw = THREE.MathUtils.lerp(state.rotation.yaw, currentYaw * 0.02, 0.05);
+            state.rotation.pitch = THREE.MathUtils.lerp(state.rotation.pitch, currentPitch * 0.02, 0.05);
+            
+            // Künstlicher Roll-Effekt beim Kurvenflug
+            state.rotation.roll = THREE.MathUtils.lerp(state.rotation.roll, -currentYaw * 0.25, 0.05);
+
+            // Rotation anwenden (In VR Kopfrotation und Schiffsrotation synchronisieren)
+            shipGroup.rotateY(state.rotation.yaw);
+            shipGroup.rotateX(state.rotation.pitch);
+            
+            // Rollen zurücksetzen
+            camera.rotation.z = state.rotation.roll;
+
+            // 2. WARP STATE MACHINE
+            if (state.warpState === 'CHARGING') {
+                state.warpProgress += 0.007; // 3 Sekunden Ladezeit
+                state.speed = Math.max(0, state.speed - 1.5); // Verlangsamen zum Aufladen
+                
+                if (state.warpProgress >= 1.0) {
+                    executeWarpJump();
+                }
+            } else if (state.warpState === 'WARPING') {
+                // Extreme Warp-Geschwindigkeit vorwärts
+                state.speed = 1200;
+                
+                // Kamera-Verzerrung (Fov vergrößern für Raumverzerrung)
+                if (camera.fov < 120) {
+                    camera.fov += 1.5;
+                    camera.updateProjectionMatrix();
+                }
+
+                // Sterne strecken sich entlang der Flugachse
+                const positions = starGeometry.attributes.position.array;
+                for (let i = 2; i < positions.length; i += 3) {
+                    // Ziehe Sterne optisch lang in Richtung des Cockpits
+                    positions[i] += state.speed * 0.3;
+                    if (positions[i] > 5000) positions[i] = -5000;
+                }
+                starGeometry.attributes.position.needsUpdate = true;
+
+            } else if (state.warpState === 'COOLING') {
+                // Aus Warp gleiten
+                state.warpProgress += 0.01;
+                state.speed = THREE.MathUtils.lerp(state.speed, state.targetSpeed * 80, 0.08);
+
+                if (camera.fov > 75) {
+                    camera.fov -= 2.0;
+                    camera.updateProjectionMatrix();
+                }
+            }
+
+            // Schiff vorwärts bewegen (Basierend auf lokaler Z-Achse)
+            const forwardVector = new THREE.Vector3(0, 0, -1);
+            forwardVector.applyQuaternion(shipGroup.quaternion);
+            shipGroup.position.addScaledVector(forwardVector, state.speed * 0.1);
+
+            // 3. HUD UPDATES
+            updateHUDCanvas();
+
+            // Desktop UI aktualisieren (falls sichtbar)
+            const hud = document.getElementById('desktop-hud');
+            if (hud && !hud.classList.contains('hidden')) {
+                document.getElementById('hud-status').innerText = state.warpState;
+                document.getElementById('hud-thrust').innerText = `${Math.round((state.targetSpeed / 1.5) * 100)}%`;
+                document.getElementById('hud-speed').innerText = `${Math.round(state.speed * 10)} km/h`;
+                document.getElementById('hud-warp').innerText = 
+                    state.warpState === 'READY' ? 'BEREIT' : 
+                    state.warpState === 'CHARGING' ? `AUFLADEN (${Math.round(state.warpProgress * 100)}%)` : 
+                    state.warpState === 'WARPING' ? 'WARP AKTIV' : 'ABKÜHLUNG';
+            }
+
+            // Rendern
+            renderer.render(scene, camera);
+        }
+
+        // --- Startsequenz Triggern ---
+        document.getElementById('start-btn').onclick = () => {
+            // Audio Context initialisieren (User-Interaktions-Pflicht)
+            sfx.init();
+
+            // Intro ausblenden
+            const intro = document.getElementById('intro-screen');
+            intro.style.transition = 'opacity 0.8s ease';
+            intro.style.opacity = 0;
+            setTimeout(() => {
+                intro.remove();
+                // Zeige Desktop-HUD, falls nicht im VR-Modus
+                if (!renderer.xr.isPresenting) {
+                    document.getElementById('desktop-hud').classList.remove('hidden');
+                }
+            }, 800);
+
+            // 3D Engine starten
+            init3D();
+            
+            // Animationsschleife (kompatibel mit WebXR Frame Loop)
+            renderer.setAnimationLoop(animate);
+        };
+    </script>
+</body>
+</html>
